@@ -14,6 +14,7 @@ fn loading_a_missing_settings_file_creates_it_with_the_defaults() {
     assert_eq!(
         settings,
         Settings {
+            launch_at_login: true,
             main_hotkey: "CommandOrControl+Shift+V".into(),
             history_hotkey: "CommandOrControl+Alt+V".into(),
             pinned_hotkey: "CommandOrControl+Shift+B".into(),
@@ -31,6 +32,7 @@ fn loading_a_missing_settings_file_creates_it_with_the_defaults() {
     let written = std::fs::read_to_string(&path).unwrap();
     assert!(written.starts_with("# Clipdeck settings."), "{written}");
     assert!(written.contains("history_capacity = 200"), "{written}");
+    assert!(written.contains("launch_at_login = true"), "{written}");
 }
 
 #[test]
@@ -127,6 +129,18 @@ fn a_settings_file_from_before_the_main_hotkey_existed_loads_with_it_unbound() {
 
     assert_eq!(settings.main_hotkey, "");
     assert_eq!(settings.history_hotkey, "CommandOrControl+Shift+V");
+}
+
+#[test]
+fn a_settings_file_from_before_launch_at_login_existed_loads_with_it_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = settings_path(&dir);
+    std::fs::write(&path, "history_capacity = 50\n").unwrap();
+
+    let settings = SettingsFile::new(&path).load().unwrap();
+
+    assert!(settings.launch_at_login);
+    assert_eq!(settings.history_capacity, 50);
 }
 
 #[test]

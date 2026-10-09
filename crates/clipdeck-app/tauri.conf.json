@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "clipdeck",
-  "version": "0.1.0",
+  "productName": "Clipdeck",
   "identifier": "dev.clipdeck.app",
   "build": {
     "frontendDist": "dist"
@@ -35,8 +34,34 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
+    "publisher": "baala3",
+    "shortDescription": "A lightweight clipboard manager",
+    "category": "Utility",
     "icon": [
-      "icons/icon.png"
-    ]
+      "icons/icon.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerHooks": "installer-hooks.nsh"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0",
+      "signingIdentity": "-"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY1QjQwRjE0ODg2MzExNUEKUldSYUVXT0lGQSswWmFjWnhiUlZIQmhvT1I4TUJYSGtFLzVSSzEwcVpuM0ZiZG12ZmNTZXJoR1UK",
+      "endpoints": [
+        "https://github.com/baala3/clipdeck/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

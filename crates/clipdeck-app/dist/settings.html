@@ -104,6 +104,18 @@
   .section-head h2 { margin: 0; }
   .section-head button { padding: 3px 10px; font-size: 12px; }
 
+  .switch { position: relative; flex: none; width: 34px; height: 20px; }
+  .switch input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+  .switch span { position: absolute; inset: 0; border-radius: 10px; background: var(--border); transition: background 0.15s; pointer-events: none; }
+  .switch span::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); transition: transform 0.15s; }
+  .switch input:checked + span { background: var(--accent); }
+  .switch input:checked + span::after { transform: translateX(14px); }
+  .switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  #about .row { gap: 12px; }
+  #version { flex: 1; }
+  #update-status { color: var(--muted); font-size: 12px; text-align: right; }
+
   footer { color: var(--muted); font-size: 12px; }
   footer code { user-select: all; word-break: break-all; font-family: ui-monospace, "Cascadia Mono", Menlo, monospace; }
 </style>
@@ -116,6 +128,16 @@
   <span id="file-error-text"></span>
 </div>
 <div id="action-error" class="banner" role="alert" hidden></div>
+
+<section>
+  <h2>General</h2>
+  <div class="panel">
+    <div class="row">
+      <label for="launch-at-login">Start Clipdeck at login</label>
+      <span class="switch"><input id="launch-at-login" type="checkbox" role="switch" /><span></span></span>
+    </div>
+  </div>
+</section>
 
 <section>
   <h2>Hotkeys</h2>
@@ -219,6 +241,17 @@
   <p class="hint">Nothing copied from these apps is captured. Matching ignores case and a trailing ".exe".</p>
 </section>
 
+<section id="about">
+  <h2>About</h2>
+  <div class="panel">
+    <div class="row">
+      <span id="version">Clipdeck</span>
+      <span id="update-status" aria-live="polite"></span>
+      <button id="check-updates" type="button">Check for Updates</button>
+    </div>
+  </div>
+</section>
+
 <footer>
   These settings are stored in <code id="file-path"></code>.
   You can also edit that file by hand - changes apply automatically.
@@ -239,6 +272,9 @@ const hotkeyButtons = document.querySelectorAll('.hotkey');
 const modifierSelects = document.querySelectorAll('select[data-field]');
 const numberInputs = document.querySelectorAll('input.number[data-field]');
 const pinnedList = document.getElementById('pinned-list');
+const launchAtLogin = document.getElementById('launch-at-login');
+const checkUpdatesButton = document.getElementById('check-updates');
+const updateStatus = document.getElementById('update-status');
 
 let view = null;
 let recordingButton = null;
@@ -280,6 +316,7 @@ function render() {
   document.querySelectorAll('.unbind').forEach((button) => {
     button.hidden = !settings[button.dataset.field];
   });
+  launchAtLogin.checked = settings.launch_at_login;
   modifierSelects.forEach((select) => { select.value = settings[select.dataset.field]; });
   numberInputs.forEach((input) => {
     if (document.activeElement !== input) input.value = settings[input.dataset.field];
@@ -394,6 +431,25 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   stopRecording(shortcutFromEvent(e));
+});
+
+launchAtLogin.addEventListener('change', () => update({ launch_at_login: launchAtLogin.checked }));
+
+checkUpdatesButton.addEventListener('click', async () => {
+  checkUpdatesButton.disabled = true;
+  updateStatus.textContent = 'Checking...';
+  try {
+    updateStatus.textContent = await invoke('check_for_updates');
+  } catch (err) {
+    updateStatus.textContent = '';
+    showActionError(String(err));
+  } finally {
+    checkUpdatesButton.disabled = false;
+  }
+});
+
+window.__TAURI__.app.getVersion().then((version) => {
+  document.getElementById('version').textContent = `Clipdeck ${version}`;
 });
 
 capacityInput.addEventListener('change', () => {

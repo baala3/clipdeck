@@ -1,8 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod autostart;
 mod clip_menu;
 mod pinned;
 mod settings;
+mod updates;
 
 use clip_engine::{
     adopt_legacy_store, ClipEngine, ClipboardSource, Settings, SqliteClipStore, SqlitePinnedStore,
@@ -92,6 +94,8 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updates::UpdateState::default())
         .invoke_handler(tauri::generate_handler![
             settings::get_settings,
             settings::update_settings,
@@ -99,13 +103,19 @@ fn main() {
             pinned::list_pinned,
             pinned::add_pinned,
             pinned::edit_pinned,
-            pinned::remove_pinned
+            pinned::remove_pinned,
+            updates::check_for_updates
         ])
         .setup(|app| {
+            // A menu bar app: no Dock icon or app menu, just the tray icon.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             let settings_state = SettingsState::load(settings::settings_file_path(app));
             let store = SqliteClipStore::open(store_path(app, "clipdeck-history.sqlite3"));
             let pinned_store = SqlitePinnedStore::open(store_path(app, "clipdeck-pinned.sqlite3"));
             let current = settings_state.current().clone();
+            let current_launch_at_login = current.launch_at_login;
             let engine = ClipEngine::new(store, pinned_store, current.engine_config());
             let hotkeys = Hotkeys::parse(&current)
                 .expect("SettingsState::load only keeps settings with valid hotkeys");
@@ -163,6 +173,12 @@ fn main() {
                 eprintln!("{err}");
             }
             settings::spawn_file_watcher(app.handle().clone());
+            // Re-registering on every launch keeps the login item pointing at
+            // this exe even if the app was moved or reinstalled elsewhere.
+            if let Err(err) = autostart::sync(current_launch_at_login) {
+                eprintln!("{err}");
+            }
+            updates::spawn_background_checks(app.handle().clone());
 
             Ok(())
         })

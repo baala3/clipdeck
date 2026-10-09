@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
+    /// Start Clipdeck when the user logs in to the OS.
+    pub launch_at_login: bool,
     /// Opens the full menu (History and Pinned together). Missing from files
     /// written before it existed, where it loads unbound rather than clashing
     /// with the hotkeys those files already use.
@@ -40,6 +42,7 @@ impl Default for Settings {
     /// (Clipy puts every item in a folder) so the newest Clips are one click away.
     fn default() -> Self {
         Self {
+            launch_at_login: true,
             main_hotkey: "CommandOrControl+Shift+V".into(),
             history_hotkey: "CommandOrControl+Alt+V".into(),
             pinned_hotkey: "CommandOrControl+Shift+B".into(),
