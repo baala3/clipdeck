@@ -5,7 +5,9 @@ use clip_windows::WindowsClipboardSource;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use windows::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
+use windows::Win32::System::DataExchange::{
+    CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
+};
 use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
 use windows::Win32::System::Ole::CF_UNICODETEXT;
 use windows::Win32::UI::WindowsAndMessaging::{CreateWindowExW, HWND_MESSAGE};
@@ -44,8 +46,11 @@ fn set_real_clipboard_text(text: &str) {
         std::ptr::copy_nonoverlapping(wide.as_ptr(), ptr, wide.len());
         let _ = GlobalUnlock(hglobal);
 
-        SetClipboardData(CF_UNICODETEXT.0 as u32, windows::Win32::Foundation::HANDLE(hglobal.0))
-            .expect("SetClipboardData failed");
+        SetClipboardData(
+            CF_UNICODETEXT.0 as u32,
+            windows::Win32::Foundation::HANDLE(hglobal.0),
+        )
+        .expect("SetClipboardData failed");
         let _ = CloseClipboard();
     }
 }
@@ -95,6 +100,11 @@ fn a_clipboard_change_reports_the_exe_name_of_the_app_that_made_it() {
     set_real_clipboard_text("clipdeck owner check");
 
     let event = wait_for_event(&mut source);
-    let app = event.source_app.expect("expected the source app to be reported");
-    assert!(app.starts_with("listener-") && app.ends_with(".exe"), "got {app:?}");
+    let app = event
+        .source_app
+        .expect("expected the source app to be reported");
+    assert!(
+        app.starts_with("listener-") && app.ends_with(".exe"),
+        "got {app:?}"
+    );
 }

@@ -83,7 +83,10 @@ fn sqlite_store_removes_the_clip_at_a_chronological_index() {
     let texts: Vec<ClipContent> = store.all().into_iter().map(|c| c.content).collect();
     assert_eq!(
         texts,
-        vec![ClipContent::Text("one".into()), ClipContent::Text("three".into())]
+        vec![
+            ClipContent::Text("one".into()),
+            ClipContent::Text("three".into())
+        ]
     );
 }
 

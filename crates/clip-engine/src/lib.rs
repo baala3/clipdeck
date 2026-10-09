@@ -1,9 +1,12 @@
 use rusqlite::Connection;
 use std::collections::HashSet;
+use std::path::Path;
 
 pub mod menu;
 mod settings;
+mod store_path;
 pub use settings::{Settings, SettingsError, SettingsFile, ShortcutModifier};
+pub use store_path::{adopt_legacy_store, LegacyStoreError};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClipContent {
@@ -263,7 +266,7 @@ pub struct SqliteClipStore {
 }
 
 impl SqliteClipStore {
-    pub fn open(path: &str) -> Self {
+    pub fn open(path: impl AsRef<Path>) -> Self {
         let conn = Connection::open(path).expect("failed to open sqlite clip store");
         conn.execute(
             "CREATE TABLE IF NOT EXISTS clips (
@@ -284,7 +287,7 @@ pub struct SqlitePinnedStore {
 }
 
 impl SqlitePinnedStore {
-    pub fn open(path: &str) -> Self {
+    pub fn open(path: impl AsRef<Path>) -> Self {
         let conn = Connection::open(path).expect("failed to open sqlite pinned store");
         conn.execute(
             "CREATE TABLE IF NOT EXISTS pinned_clips (

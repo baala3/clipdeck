@@ -1,12 +1,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod autostart;
 mod clip_menu;
 mod pinned;
 mod settings;
+mod updates;
 
-use clip_engine::{ClipEngine, ClipboardSource, Settings, SqliteClipStore, SqlitePinnedStore};
+use clip_engine::{
+    adopt_legacy_store, ClipEngine, ClipboardSource, Settings, SqliteClipStore, SqlitePinnedStore,
+};
 use clip_menu::{MenuKind, MenuTargets};
 use settings::{HotkeyAction, Hotkeys, SettingsState, SETTINGS_WINDOW};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::tray::TrayIconBuilder;
@@ -28,6 +33,7 @@ struct AppState {
     /// Whatever window was focused right before a popup menu opened (Windows
     /// HWND as a raw value; 0 means none captured). Focus goes back there, and
     /// a chosen Clip is pasted into it.
+    #[cfg(windows)]
     previous_foreground: Mutex<isize>,
     menu_targets: Mutex<MenuTargets>,
     /// A popup menu is modal; a hotkey pressed while one is open is ignored.
@@ -61,10 +67,36 @@ fn on_hotkey(app: &tauri::AppHandle, action: HotkeyAction) {
     }
 }
 
+/// Where the store `file_name` lives: the per-user local data dir, which is
+/// machine-local (unlike the roaming settings file) since History can hold
+/// large images. Older versions kept stores in the working directory, which
+/// for a double-clicked exe is its own folder; those are moved over once.
+fn store_path(app: &tauri::App, file_name: &str) -> PathBuf {
+    let data_dir = app
+        .path()
+        .app_local_data_dir()
+        .expect("no app data directory on this OS");
+    let legacy_dirs: Vec<PathBuf> = [
+        std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(PathBuf::from)),
+        std::env::current_dir().ok(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    adopt_legacy_store(&data_dir, file_name, &legacy_dirs).unwrap_or_else(|err| {
+        eprintln!("{err}");
+        err.legacy
+    })
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updates::UpdateState::default())
         .invoke_handler(tauri::generate_handler![
             settings::get_settings,
             settings::update_settings,
@@ -72,13 +104,19 @@ fn main() {
             pinned::list_pinned,
             pinned::add_pinned,
             pinned::edit_pinned,
-            pinned::remove_pinned
+            pinned::remove_pinned,
+            updates::check_for_updates
         ])
         .setup(|app| {
+            // A menu bar app: no Dock icon or app menu, just the tray icon.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             let settings_state = SettingsState::load(settings::settings_file_path(app));
-            let store = SqliteClipStore::open("clipdeck-history.sqlite3");
-            let pinned_store = SqlitePinnedStore::open("clipdeck-pinned.sqlite3");
+            let store = SqliteClipStore::open(store_path(app, "clipdeck-history.sqlite3"));
+            let pinned_store = SqlitePinnedStore::open(store_path(app, "clipdeck-pinned.sqlite3"));
             let current = settings_state.current().clone();
+            let current_launch_at_login = current.launch_at_login;
             let engine = ClipEngine::new(store, pinned_store, current.engine_config());
             let hotkeys = Hotkeys::parse(&current)
                 .expect("SettingsState::load only keeps settings with valid hotkeys");
@@ -88,19 +126,27 @@ fn main() {
                 settings: Mutex::new(settings_state),
                 active_settings: Mutex::new(current),
                 hotkeys: Mutex::new(hotkeys),
+                #[cfg(windows)]
                 previous_foreground: Mutex::new(0),
                 menu_targets: Mutex::new(MenuTargets::default()),
                 menu_open: AtomicBool::new(false),
             });
 
             #[cfg(windows)]
-            spawn_capture_thread(app.handle().clone(), clip_windows::WindowsClipboardSource::new());
+            spawn_capture_thread(
+                app.handle().clone(),
+                clip_windows::WindowsClipboardSource::new(),
+            );
             #[cfg(target_os = "macos")]
             spawn_capture_thread(app.handle().clone(), clip_macos::MacClipboardSource::new());
 
             // Like Clipy, clicking the tray icon shows the full menu.
             TrayIconBuilder::with_id(clip_menu::TRAY_ID)
-                .icon(app.default_window_icon().cloned().expect("default window icon missing"))
+                .icon(
+                    app.default_window_icon()
+                        .cloned()
+                        .expect("default window icon missing"),
+                )
                 .tooltip("Clipdeck")
                 .menu(&clip_menu::build_initial_tray_menu(app.handle())?)
                 .build(app)?;
@@ -111,7 +157,12 @@ fn main() {
                         if event.state() != ShortcutState::Pressed {
                             return;
                         }
-                        let action = app.state::<AppState>().hotkeys.lock().unwrap().action_for(shortcut);
+                        let action = app
+                            .state::<AppState>()
+                            .hotkeys
+                            .lock()
+                            .unwrap()
+                            .action_for(shortcut);
                         if let Some(action) = action {
                             on_hotkey(app, action);
                         }
@@ -124,6 +175,12 @@ fn main() {
                 eprintln!("{err}");
             }
             settings::spawn_file_watcher(app.handle().clone());
+            // Re-registering on every launch keeps the login item pointing at
+            // this exe even if the app was moved or reinstalled elsewhere.
+            if let Err(err) = autostart::sync(current_launch_at_login) {
+                eprintln!("{err}");
+            }
+            updates::spawn_background_checks(app.handle().clone());
 
             Ok(())
         })

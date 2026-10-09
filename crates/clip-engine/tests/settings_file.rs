@@ -14,6 +14,7 @@ fn loading_a_missing_settings_file_creates_it_with_the_defaults() {
     assert_eq!(
         settings,
         Settings {
+            launch_at_login: true,
             main_hotkey: "CommandOrControl+Shift+V".into(),
             history_hotkey: "CommandOrControl+Alt+V".into(),
             pinned_hotkey: "CommandOrControl+Shift+B".into(),
@@ -31,6 +32,7 @@ fn loading_a_missing_settings_file_creates_it_with_the_defaults() {
     let written = std::fs::read_to_string(&path).unwrap();
     assert!(written.starts_with("# Clipdeck settings."), "{written}");
     assert!(written.contains("history_capacity = 200"), "{written}");
+    assert!(written.contains("launch_at_login = true"), "{written}");
 }
 
 #[test]
@@ -52,7 +54,10 @@ fn saving_from_the_settings_window_keeps_comments_a_developer_wrote_by_hand() {
 
     let written = std::fs::read_to_string(&path).unwrap();
     assert!(written.contains("# my dotfiles copy"), "{written}");
-    assert!(written.contains("history_capacity = 750 # plenty"), "{written}");
+    assert!(
+        written.contains("history_capacity = 750 # plenty"),
+        "{written}"
+    );
     assert_eq!(SettingsFile::new(&path).load().unwrap(), settings);
 }
 
@@ -104,7 +109,10 @@ fn reload_if_changed_reports_hand_edits_but_not_the_apps_own_saves() {
 
     std::fs::write(&path, "history_capacity = \"lots\"\n").unwrap();
     assert!(file.reload_if_changed().unwrap().is_err());
-    assert!(file.reload_if_changed().is_none(), "a broken file is reported once, not every poll");
+    assert!(
+        file.reload_if_changed().is_none(),
+        "a broken file is reported once, not every poll"
+    );
 }
 
 #[test]
@@ -121,6 +129,18 @@ fn a_settings_file_from_before_the_main_hotkey_existed_loads_with_it_unbound() {
 
     assert_eq!(settings.main_hotkey, "");
     assert_eq!(settings.history_hotkey, "CommandOrControl+Shift+V");
+}
+
+#[test]
+fn a_settings_file_from_before_launch_at_login_existed_loads_with_it_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = settings_path(&dir);
+    std::fs::write(&path, "history_capacity = 50\n").unwrap();
+
+    let settings = SettingsFile::new(&path).load().unwrap();
+
+    assert!(settings.launch_at_login);
+    assert_eq!(settings.history_capacity, 50);
 }
 
 #[test]
@@ -160,7 +180,11 @@ fn the_delete_and_pin_click_modifiers_must_differ_unless_turned_off() {
 fn modifier_settings_are_written_as_readable_names() {
     let dir = tempfile::tempdir().unwrap();
     let path = settings_path(&dir);
-    std::fs::write(&path, "number_shortcut_modifier = \"Alt\"\ndelete_modifier = \"Off\"\n").unwrap();
+    std::fs::write(
+        &path,
+        "number_shortcut_modifier = \"Alt\"\ndelete_modifier = \"Off\"\n",
+    )
+    .unwrap();
 
     let settings = SettingsFile::new(&path).load().unwrap();
 

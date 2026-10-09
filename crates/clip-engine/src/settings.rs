@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
+    /// Start Clipdeck when the user logs in to the OS.
+    pub launch_at_login: bool,
     /// Opens the full menu (History and Pinned together). Missing from files
     /// written before it existed, where it loads unbound rather than clashing
     /// with the hotkeys those files already use.
@@ -40,6 +42,7 @@ impl Default for Settings {
     /// (Clipy puts every item in a folder) so the newest Clips are one click away.
     fn default() -> Self {
         Self {
+            launch_at_login: true,
             main_hotkey: "CommandOrControl+Shift+V".into(),
             history_hotkey: "CommandOrControl+Alt+V".into(),
             pinned_hotkey: "CommandOrControl+Shift+B".into(),
@@ -72,7 +75,11 @@ impl ShortcutModifier {
     /// so Ctrl+Shift+click doesn't count as a Ctrl+click.
     pub fn is_held(self, held: crate::menu::HeldModifiers) -> bool {
         let only = |command_or_control, alt, shift| {
-            held == crate::menu::HeldModifiers { command_or_control, alt, shift }
+            held == crate::menu::HeldModifiers {
+                command_or_control,
+                alt,
+                shift,
+            }
         };
         match self {
             ShortcutModifier::CommandOrControl => only(true, false, false),
@@ -123,21 +130,41 @@ impl Settings {
     }
 
     pub fn validate(&self) -> Result<(), SettingsError> {
-        check_range("history_capacity", self.history_capacity, 1, crate::MAX_HISTORY_CAPACITY)?;
+        check_range(
+            "history_capacity",
+            self.history_capacity,
+            1,
+            crate::MAX_HISTORY_CAPACITY,
+        )?;
         check_range("menu_title_length", self.menu_title_length, 5, 200)?;
-        check_range("menu_items_inline", self.menu_items_inline, 0, crate::MAX_HISTORY_CAPACITY)?;
+        check_range(
+            "menu_items_inline",
+            self.menu_items_inline,
+            0,
+            crate::MAX_HISTORY_CAPACITY,
+        )?;
         check_range("menu_items_per_folder", self.menu_items_per_folder, 1, 100)?;
 
-        let bound: Vec<_> = self.hotkeys().into_iter().filter(|(_, key)| !key.is_empty()).collect();
+        let bound: Vec<_> = self
+            .hotkeys()
+            .into_iter()
+            .filter(|(_, key)| !key.is_empty())
+            .collect();
         for (i, (field_a, key_a)) in bound.iter().enumerate() {
-            if let Some((field_b, _)) = bound[i + 1..].iter().find(|(_, key_b)| key_a.eq_ignore_ascii_case(key_b)) {
+            if let Some((field_b, _)) = bound[i + 1..]
+                .iter()
+                .find(|(_, key_b)| key_a.eq_ignore_ascii_case(key_b))
+            {
                 return Err(SettingsError::Invalid(format!(
                     "{field_a} and {field_b} must be different (both are {key_a:?})"
                 )));
             }
         }
 
-        for (field, modifier) in [("delete_modifier", self.delete_modifier), ("pin_modifier", self.pin_modifier)] {
+        for (field, modifier) in [
+            ("delete_modifier", self.delete_modifier),
+            ("pin_modifier", self.pin_modifier),
+        ] {
             if modifier == ShortcutModifier::None {
                 return Err(SettingsError::Invalid(format!(
                     "{field} can't be None - a plain click pastes. Use Off to disable it."

@@ -115,8 +115,29 @@ fn is_function_key(code: Code) -> bool {
     use Code::*;
     matches!(
         code,
-        F1 | F2 | F3 | F4 | F5 | F6 | F7 | F8 | F9 | F10 | F11 | F12 | F13 | F14 | F15 | F16
-            | F17 | F18 | F19 | F20 | F21 | F22 | F23 | F24
+        F1 | F2
+            | F3
+            | F4
+            | F5
+            | F6
+            | F7
+            | F8
+            | F9
+            | F10
+            | F11
+            | F12
+            | F13
+            | F14
+            | F15
+            | F16
+            | F17
+            | F18
+            | F19
+            | F20
+            | F21
+            | F22
+            | F23
+            | F24
     )
 }
 
@@ -177,19 +198,29 @@ pub struct SettingsView {
     max_history_capacity: usize,
 }
 
-/// Puts `new` into effect: hotkeys first, since that's the step that can fail
-/// for reasons outside our control, then the engine. Nothing changes if it
-/// returns an error.
+/// Puts `new` into effect: hotkeys and start at login first, since those are
+/// the steps that can fail for reasons outside our control, then the engine.
+/// Nothing changes if it returns an error.
 fn apply(app: &AppHandle, state: &mut SettingsState, new: Settings) -> Result<(), String> {
     new.validate().map_err(|err| err.to_string())?;
     let new_hotkeys = Hotkeys::parse(&new)?;
     let app_state = app.state::<AppState>();
     let old_hotkeys = app_state.hotkeys.lock().unwrap().clone();
 
-    if new_hotkeys != old_hotkeys && !state.hotkeys_suspended {
+    let swap_hotkeys = new_hotkeys != old_hotkeys && !state.hotkeys_suspended;
+    if swap_hotkeys {
         old_hotkeys.unregister(app);
         if let Err(err) = new_hotkeys.register(app) {
             let _ = old_hotkeys.register(app);
+            return Err(err);
+        }
+    }
+    if new.launch_at_login != state.current.launch_at_login {
+        if let Err(err) = crate::autostart::sync(new.launch_at_login) {
+            if swap_hotkeys {
+                new_hotkeys.unregister(app);
+                let _ = old_hotkeys.register(app);
+            }
             return Err(err);
         }
     }
@@ -207,7 +238,11 @@ fn apply(app: &AppHandle, state: &mut SettingsState, new: Settings) -> Result<()
 }
 
 pub fn register_initial_hotkeys(app: &AppHandle) -> Result<(), String> {
-    app.state::<AppState>().hotkeys.lock().unwrap().register(app)
+    app.state::<AppState>()
+        .hotkeys
+        .lock()
+        .unwrap()
+        .register(app)
 }
 
 #[tauri::command]
