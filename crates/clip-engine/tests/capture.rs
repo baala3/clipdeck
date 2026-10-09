@@ -51,6 +51,12 @@ struct InMemoryPinnedStore {
 }
 
 impl PinnedStore for InMemoryPinnedStore {
+    fn replace(&mut self, index: usize, clip: Clip) {
+        if let Some(slot) = self.clips.get_mut(index) {
+            *slot = clip;
+        }
+    }
+
     fn contains(&self, content: &ClipContent) -> bool {
         self.clips.iter().any(|clip| &clip.content == content)
     }
@@ -312,4 +318,39 @@ fn capturing_content_already_in_history_moves_it_to_the_top_instead_of_duplicati
     assert_eq!(engine.capture(text_clip("one")), CaptureOutcome::Captured);
 
     assert_eq!(history_texts(&engine), vec!["two", "three", "one"]);
+}
+
+#[test]
+fn deleting_a_clip_removes_only_that_clip_from_history() {
+    let mut engine = ClipEngine::new(
+        InMemoryStore::default(),
+        InMemoryPinnedStore::default(),
+        EngineConfig::default(),
+    );
+    for text in ["one", "two", "three"] {
+        engine.capture(text_clip(text));
+    }
+
+    assert!(engine.delete(1));
+    assert!(!engine.delete(5), "out of range does nothing");
+
+    assert_eq!(history_texts(&engine), vec!["one", "three"]);
+}
+
+#[test]
+fn clearing_history_removes_every_clip_but_leaves_pinned_ones() {
+    let mut engine = ClipEngine::new(
+        InMemoryStore::default(),
+        InMemoryPinnedStore::default(),
+        EngineConfig::default(),
+    );
+    for text in ["one", "two"] {
+        engine.capture(text_clip(text));
+    }
+    engine.pin(0);
+
+    engine.clear_history();
+
+    assert!(engine.history().is_empty());
+    assert_eq!(engine.pinned().len(), 1);
 }

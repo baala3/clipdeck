@@ -78,6 +78,32 @@
   #exclude-form { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); }
   #exclude-input { flex: 1; min-width: 0; }
 
+  .hotkey-control { display: inline-flex; align-items: center; gap: 4px; }
+  .hotkey .unset { color: var(--muted); }
+  .unbind { border: none; background: none; color: var(--muted); padding: 4px 6px; font-size: 16px; line-height: 1; }
+  .unbind:hover { color: var(--text); }
+  .unbind[hidden] { display: inline-block; visibility: hidden; }
+  select { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; }
+  .number { width: 80px; text-align: right; }
+  .row label { flex: 1; }
+
+  #pinned-list { list-style: none; margin: 0; padding: 0; }
+  #pinned-list > li { display: flex; align-items: flex-start; gap: 8px; padding: 8px 8px 8px 14px; }
+  #pinned-list > li + li { border-top: 1px solid var(--border); }
+  #pinned-list .empty { color: var(--muted); padding: 10px 14px; }
+  #pinned-list .text { flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-word; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-family: ui-monospace, "Cascadia Mono", Menlo, monospace; font-size: 12px; padding-top: 4px; }
+  #pinned-list .actions { display: flex; gap: 4px; flex: none; }
+  #pinned-list .actions button { padding: 3px 8px; font-size: 12px; }
+  .editor { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; width: 100%; }
+  #pinned-list > li.editing { padding: 0; }
+  .editor textarea { width: 100%; min-height: 96px; resize: vertical; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font: 12px/1.4 ui-monospace, "Cascadia Mono", Menlo, monospace; outline: none; }
+  .editor textarea:focus { border-color: var(--accent); }
+  .editor .editor-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+  .editor .editor-actions .hint { flex: 1; color: var(--muted); font-size: 12px; }
+  .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .section-head h2 { margin: 0; }
+  .section-head button { padding: 3px 10px; font-size: 12px; }
+
   footer { color: var(--muted); font-size: 12px; }
   footer code { user-select: all; word-break: break-all; font-family: ui-monospace, "Cascadia Mono", Menlo, monospace; }
 </style>
@@ -95,15 +121,77 @@
   <h2>Hotkeys</h2>
   <div class="panel">
     <div class="row">
-      <span id="history-label">Open History</span>
-      <button class="hotkey" data-field="history_hotkey" aria-labelledby="history-label"></button>
+      <span id="main-label">Open menu (History and Pinned)</span>
+      <span class="hotkey-control">
+        <button class="hotkey" data-field="main_hotkey" aria-labelledby="main-label"></button>
+        <button class="unbind" data-field="main_hotkey" title="Remove this hotkey" aria-label="Remove the menu hotkey">×</button>
+      </span>
     </div>
     <div class="row">
-      <span id="pinned-label">Open Pinned</span>
-      <button class="hotkey" data-field="pinned_hotkey" aria-labelledby="pinned-label"></button>
+      <span id="history-label">Open History menu</span>
+      <span class="hotkey-control">
+        <button class="hotkey" data-field="history_hotkey" aria-labelledby="history-label"></button>
+        <button class="unbind" data-field="history_hotkey" title="Remove this hotkey" aria-label="Remove the History hotkey">×</button>
+      </span>
+    </div>
+    <div class="row">
+      <span id="pinned-label">Open Pinned menu</span>
+      <span class="hotkey-control">
+        <button class="hotkey" data-field="pinned_hotkey" aria-labelledby="pinned-label"></button>
+        <button class="unbind" data-field="pinned_hotkey" title="Remove this hotkey" aria-label="Remove the Pinned hotkey">×</button>
+      </span>
+    </div>
+    <div class="row">
+      <span id="clear-label">Clear History</span>
+      <span class="hotkey-control">
+        <button class="hotkey" data-field="clear_history_hotkey" aria-labelledby="clear-label"></button>
+        <button class="unbind" data-field="clear_history_hotkey" title="Remove this hotkey" aria-label="Remove the Clear History hotkey">×</button>
+      </span>
     </div>
   </div>
   <p class="hint">Click a shortcut, then press the new key combination. Esc cancels.</p>
+</section>
+
+<section>
+  <h2>Menu</h2>
+  <div class="panel">
+    <div class="row">
+      <label for="number-modifier">Pick items 1-10 with</label>
+      <select id="number-modifier" data-field="number_shortcut_modifier"></select>
+    </div>
+    <div class="row">
+      <label for="delete-modifier">Delete an item with</label>
+      <select id="delete-modifier" data-field="delete_modifier"></select>
+    </div>
+    <div class="row">
+      <label for="pin-modifier">Pin a History item with</label>
+      <select id="pin-modifier" data-field="pin_modifier"></select>
+    </div>
+    <div class="row">
+      <label for="title-length">Characters per item</label>
+      <input id="title-length" class="number" type="number" data-field="menu_title_length" data-min="5" data-max="200" />
+    </div>
+    <div class="row">
+      <label for="items-inline">Items before folders</label>
+      <input id="items-inline" class="number" type="number" data-field="menu_items_inline" data-min="0" data-max="2000" />
+    </div>
+    <div class="row">
+      <label for="items-per-folder">Items per folder</label>
+      <input id="items-per-folder" class="number" type="number" data-field="menu_items_per_folder" data-min="1" data-max="100" />
+    </div>
+  </div>
+  <p class="hint">With 0 items before folders, the menu groups every Clip into folders of "1 - 10", "11 - 20", and so on, like Clipy.</p>
+</section>
+
+<section id="pinned-section">
+  <div class="section-head">
+    <h2>Pinned</h2>
+    <button id="pinned-new" type="button">New</button>
+  </div>
+  <div class="panel">
+    <ul id="pinned-list"></ul>
+  </div>
+  <p class="hint">Pinned items stay until you remove them. Pin a Clip from the menu, or write one here.</p>
 </section>
 
 <section>
@@ -148,6 +236,9 @@ const excludedList = document.getElementById('excluded-list');
 const excludeForm = document.getElementById('exclude-form');
 const excludeInput = document.getElementById('exclude-input');
 const hotkeyButtons = document.querySelectorAll('.hotkey');
+const modifierSelects = document.querySelectorAll('select[data-field]');
+const numberInputs = document.querySelectorAll('input.number[data-field]');
+const pinnedList = document.getElementById('pinned-list');
 
 let view = null;
 let recordingButton = null;
@@ -163,6 +254,13 @@ function displayToken(token) {
 }
 
 function renderHotkey(button, hotkey) {
+  if (!hotkey) {
+    const unset = document.createElement('span');
+    unset.className = 'unset';
+    unset.textContent = 'Not set';
+    button.replaceChildren(unset);
+    return;
+  }
   button.replaceChildren(...hotkey.split('+').map((token) => {
     const kbd = document.createElement('kbd');
     kbd.textContent = displayToken(token.trim());
@@ -178,6 +276,13 @@ function render() {
 
   hotkeyButtons.forEach((button) => {
     if (button !== recordingButton) renderHotkey(button, settings[button.dataset.field]);
+  });
+  document.querySelectorAll('.unbind').forEach((button) => {
+    button.hidden = !settings[button.dataset.field];
+  });
+  modifierSelects.forEach((select) => { select.value = settings[select.dataset.field]; });
+  numberInputs.forEach((input) => {
+    if (document.activeElement !== input) input.value = settings[input.dataset.field];
   });
 
   capacityInput.max = max_history_capacity;
@@ -318,11 +423,193 @@ excludeForm.addEventListener('submit', (e) => {
   update({ excluded_apps: [...existing, app] });
 });
 
+// Menu modifiers. Number shortcuts can use a bare digit; click actions can't
+// (a plain click pastes).
+const MOD = isMac ? '⌘' : 'Ctrl';
+const MODIFIER_OPTIONS = {
+  number_shortcut_modifier: [
+    ['CommandOrControl', `${MOD} + number`],
+    ['Alt', `${isMac ? '⌥' : 'Alt'} + number`],
+    ['None', 'Number key alone'],
+    ['Off', 'Off'],
+  ],
+  delete_modifier: [
+    ['Alt', `${isMac ? '⌥' : 'Alt'} + click`],
+    ['CommandOrControl', `${MOD} + click`],
+    ['Shift', `${isMac ? '⇧' : 'Shift'} + click`],
+    ['Off', 'Off'],
+  ],
+};
+MODIFIER_OPTIONS.pin_modifier = MODIFIER_OPTIONS.delete_modifier;
+
+modifierSelects.forEach((select) => {
+  for (const [value, label] of MODIFIER_OPTIONS[select.dataset.field]) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    select.appendChild(option);
+  }
+  select.addEventListener('change', () => update({ [select.dataset.field]: select.value }));
+});
+
+numberInputs.forEach((input) => {
+  input.min = input.dataset.min;
+  input.max = input.dataset.max;
+  input.addEventListener('change', () => {
+    const value = Number(input.value);
+    const min = Number(input.dataset.min);
+    const max = Number(input.dataset.max);
+    if (!Number.isInteger(value) || value < min || value > max) {
+      showActionError(`${input.labels[0].textContent} must be a whole number from ${min} to ${max}.`);
+      input.value = view.settings[input.dataset.field];
+      return;
+    }
+    update({ [input.dataset.field]: value });
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') input.blur();
+  });
+});
+
+document.querySelectorAll('.unbind').forEach((button) => {
+  button.addEventListener('click', () => update({ [button.dataset.field]: '' }));
+});
+
+// Pinned items: written, edited, and removed here.
+let pinnedItems = [];
+let editing = null; // null, 'new', or the index of the item being edited
+
+function pinnedEditor(initial, onSave) {
+  const editor = document.createElement('form');
+  editor.className = 'editor';
+  const textarea = document.createElement('textarea');
+  textarea.value = initial;
+  textarea.placeholder = 'Text to keep in Pinned...';
+  textarea.setAttribute('aria-label', 'Pinned text');
+  const actions = document.createElement('div');
+  actions.className = 'editor-actions';
+  const hint = document.createElement('span');
+  hint.className = 'hint';
+  hint.textContent = `${MOD}+Enter to save · Esc to cancel`;
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.textContent = 'Cancel';
+  const save = document.createElement('button');
+  save.type = 'submit';
+  save.className = 'primary';
+  save.textContent = 'Save';
+  const sync = () => { save.disabled = !textarea.value.trim(); };
+  sync();
+  textarea.addEventListener('input', sync);
+  const stop = () => { editing = null; renderPinned(); };
+  cancel.addEventListener('click', stop);
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      editor.requestSubmit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      stop();
+    }
+  });
+  editor.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!textarea.value.trim()) return;
+    try {
+      await onSave(textarea.value);
+      showActionError(null);
+      editing = null;
+      await loadPinned();
+    } catch (err) {
+      showActionError(String(err));
+    }
+  });
+  actions.append(hint, cancel, save);
+  editor.append(textarea, actions);
+  setTimeout(() => textarea.focus(), 0);
+  return editor;
+}
+
+function renderPinned() {
+  pinnedList.replaceChildren();
+  if (editing === 'new') {
+    const li = document.createElement('li');
+    li.className = 'editing';
+    li.appendChild(pinnedEditor('', (text) => invoke('add_pinned', { text })));
+    pinnedList.appendChild(li);
+  }
+  if (pinnedItems.length === 0 && editing !== 'new') {
+    const empty = document.createElement('li');
+    empty.className = 'empty';
+    empty.textContent = 'Nothing pinned yet.';
+    pinnedList.appendChild(empty);
+  }
+  for (const item of pinnedItems) {
+    const li = document.createElement('li');
+    if (editing === item.index) {
+      li.className = 'editing';
+      li.appendChild(pinnedEditor(item.text, (text) => invoke('edit_pinned', { index: item.index, text })));
+      pinnedList.appendChild(li);
+      continue;
+    }
+    const text = document.createElement('span');
+    text.className = 'text';
+    text.textContent = item.text;
+    text.title = item.text;
+    const actions = document.createElement('span');
+    actions.className = 'actions';
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.textContent = 'Edit';
+    edit.onclick = () => { editing = item.index; renderPinned(); };
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = 'Remove';
+    remove.onclick = async () => {
+      try {
+        await invoke('remove_pinned', { index: item.index });
+        await loadPinned();
+      } catch (err) {
+        showActionError(String(err));
+      }
+    };
+    actions.append(edit, remove);
+    li.append(text, actions);
+    pinnedList.appendChild(li);
+  }
+}
+
+async function loadPinned() {
+  try {
+    pinnedItems = await invoke('list_pinned');
+  } catch (err) {
+    showActionError(`Couldn't load pinned items: ${err}`);
+  }
+  // Indices shift when the list changes elsewhere; drop an edit in progress then.
+  if (typeof editing === 'number' && !pinnedItems.some((item) => item.index === editing)) editing = null;
+  renderPinned();
+}
+
+document.getElementById('pinned-new').addEventListener('click', () => {
+  editing = 'new';
+  renderPinned();
+});
+
+listen('pinned-changed', () => {
+  // Don't yank an editor away from someone typing in it.
+  if (editing === null) loadPinned();
+});
+
+listen('show-section', (event) => {
+  document.getElementById(`${event.payload}-section`)?.scrollIntoView({ block: 'start' });
+});
+
 listen('settings-changed', (event) => {
   view = event.payload;
   render();
 });
 
+loadPinned();
 invoke('get_settings')
   .then((initial) => { view = initial; render(); })
   .catch((err) => showActionError(`Couldn't load settings: ${err}`));

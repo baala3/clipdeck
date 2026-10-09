@@ -15,6 +15,28 @@ pub fn foreground_window() -> isize {
     unsafe { GetForegroundWindow().0 as isize }
 }
 
+/// Gives foreground focus back to `handle` (from `foreground_window`), e.g.
+/// after a popup menu closed without a selection. Waits briefly for the switch
+/// to land, since SetForegroundWindow can take a moment; a keystroke sent
+/// before then would go to whatever still had focus. Returns false if there
+/// was no window to restore.
+pub fn restore_foreground(handle: isize) -> bool {
+    if handle == 0 {
+        return false;
+    }
+    let target = HWND(handle as *mut core::ffi::c_void);
+    unsafe {
+        let _ = SetForegroundWindow(target);
+        for _ in 0..20 {
+            if GetForegroundWindow() == target {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+    true
+}
+
 fn key_input(vk: VIRTUAL_KEY, key_up: bool) -> INPUT {
     INPUT {
         r#type: INPUT_KEYBOARD,
@@ -38,22 +60,10 @@ fn key_input(vk: VIRTUAL_KEY, key_up: bool) -> INPUT {
 /// that happens this silently no-ops - the Clip is still on the clipboard, so
 /// a manual Ctrl+V still works.
 pub fn focus_window_and_paste(handle: isize) {
-    if handle == 0 {
+    if !restore_foreground(handle) {
         return;
     }
-    let target = HWND(handle as *mut core::ffi::c_void);
     unsafe {
-        let _ = SetForegroundWindow(target);
-        // SetForegroundWindow can take a moment to actually hand over focus;
-        // sending the keystroke before it lands would paste into whatever
-        // still had focus (often our own, now-hidden popup).
-        for _ in 0..20 {
-            if GetForegroundWindow() == target {
-                break;
-            }
-            thread::sleep(Duration::from_millis(10));
-        }
-
         let inputs = [
             key_input(VK_CONTROL, false),
             key_input(VK_V, false),

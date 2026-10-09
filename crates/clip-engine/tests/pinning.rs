@@ -37,6 +37,12 @@ struct InMemoryPinnedStore {
 }
 
 impl PinnedStore for InMemoryPinnedStore {
+    fn replace(&mut self, index: usize, clip: Clip) {
+        if let Some(slot) = self.clips.get_mut(index) {
+            *slot = clip;
+        }
+    }
+
     fn contains(&self, content: &ClipContent) -> bool {
         self.clips.iter().any(|clip| &clip.content == content)
     }
@@ -148,4 +154,24 @@ fn text_written_by_the_user_can_be_pinned_directly_without_touching_history() {
         }]
     );
     assert_eq!(engine.history(), vec![text_clip("copied")]);
+}
+
+#[test]
+fn a_pinned_item_can_be_edited_in_place() {
+    let mut engine = engine_with_history(vec![]);
+    engine.pin_text("first".into());
+    engine.pin_text("second".into());
+
+    assert!(engine.update_pinned(0, "first, edited".into()));
+    assert!(!engine.update_pinned(0, "  ".into()), "blank text is rejected");
+    assert!(!engine.update_pinned(9, "nope".into()), "out of range does nothing");
+
+    let texts: Vec<ClipContent> = engine.pinned().into_iter().map(|c| c.content).collect();
+    assert_eq!(
+        texts,
+        vec![
+            ClipContent::Text("first, edited".into()),
+            ClipContent::Text("second".into())
+        ]
+    );
 }

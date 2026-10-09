@@ -1,153 +1,37 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod clip_menu;
+mod pinned;
 mod settings;
 
-use clip_engine::{ClipContent, ClipEngine, ClipboardSource, SqliteClipStore, SqlitePinnedStore};
-use serde::Serialize;
-use settings::{Hotkeys, SettingsState, SETTINGS_WINDOW};
-use std::collections::HashMap;
+use clip_engine::{ClipEngine, ClipboardSource, Settings, SqliteClipStore, SqlitePinnedStore};
+use clip_menu::{MenuKind, MenuTargets};
+use settings::{HotkeyAction, Hotkeys, SettingsState, SETTINGS_WINDOW};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
-use tauri::menu::{CheckMenuItem, Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{Manager, State, WindowEvent};
-use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri::{Manager, WindowEvent};
 use tauri_plugin_global_shortcut::ShortcutState;
 
-/// Spurious blur events can fire right after `window.show()` + `window.set_focus()`
-/// (a known Tauri/WebView2 race), so hide-on-blur ignores any blur within this
-/// window of a deliberate show.
-const SHOW_GRACE_PERIOD: Duration = Duration::from_millis(400);
-
-/// One row in a popup. `id` is the Clip's chronological index in the engine
-/// (0 = oldest), which is what every engine call takes, so the frontend never
-/// has to convert display positions back into engine indices.
-#[derive(Serialize, Clone)]
-struct ClipDto {
-    id: usize,
-    text: String,
-    pinned: bool,
-}
+type Engine = ClipEngine<SqliteClipStore, SqlitePinnedStore>;
 
 struct AppState {
     engine: Mutex<Engine>,
     paused: AtomicBool,
-    shown_at: Mutex<HashMap<String, Instant>>,
     settings: Mutex<SettingsState>,
+    /// A copy of the settings in effect, for code that must never wait on the
+    /// `settings` lock (menus are built on the event loop while a settings
+    /// change may be holding that lock and waiting on the event loop itself).
+    active_settings: Mutex<Settings>,
     /// The hotkeys currently in effect, read by the global shortcut handler.
     hotkeys: Mutex<Hotkeys>,
-    /// Whatever window was focused right before a popup was shown (Windows
-    /// HWND as a raw value; 0 means none captured). Restored and pasted into
-    /// after a selection, so picking a Clip pastes it directly.
+    /// Whatever window was focused right before a popup menu opened (Windows
+    /// HWND as a raw value; 0 means none captured). Focus goes back there, and
+    /// a chosen Clip is pasted into it.
     previous_foreground: Mutex<isize>,
-}
-
-type Engine = ClipEngine<SqliteClipStore, SqlitePinnedStore>;
-
-/// Text Clips, newest first, as popup rows. Images aren't shown in the popups yet.
-fn text_rows(clips: Vec<clip_engine::Clip>, is_pinned: impl Fn(&ClipContent) -> bool) -> Vec<ClipDto> {
-    let mut rows: Vec<ClipDto> = clips
-        .into_iter()
-        .enumerate()
-        .filter_map(|(id, clip)| {
-            let pinned = is_pinned(&clip.content);
-            match clip.content {
-                ClipContent::Text(text) => Some(ClipDto { id, text, pinned }),
-                ClipContent::Image(_) => None,
-            }
-        })
-        .collect();
-    rows.reverse();
-    rows
-}
-
-fn clip_text(clips: Vec<clip_engine::Clip>, id: usize) -> Option<String> {
-    match clips.into_iter().nth(id)?.content {
-        ClipContent::Text(text) => Some(text),
-        ClipContent::Image(_) => None,
-    }
-}
-
-#[tauri::command]
-fn get_history(state: State<AppState>) -> Vec<ClipDto> {
-    let engine = state.engine.lock().unwrap();
-    let pinned: Vec<ClipContent> = engine.pinned().into_iter().map(|clip| clip.content).collect();
-    text_rows(engine.history(), |content| pinned.contains(content))
-}
-
-#[tauri::command]
-fn get_pinned(state: State<AppState>) -> Vec<ClipDto> {
-    let engine = state.engine.lock().unwrap();
-    text_rows(engine.pinned(), |_| true)
-}
-
-fn copy_and_hide(
-    app: &tauri::AppHandle,
-    window: &tauri::WebviewWindow,
-    state: &AppState,
-    text: Option<String>,
-) {
-    if let Some(text) = text {
-        if let Err(err) = app.clipboard().write_text(text) {
-            eprintln!("copy_and_hide: failed to write clipboard: {err}");
-        }
-    }
-    let _ = window.hide();
-
-    #[cfg(windows)]
-    {
-        let handle = *state.previous_foreground.lock().unwrap();
-        clip_windows::focus_window_and_paste(handle);
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = state;
-    }
-}
-
-/// Selecting a History Clip also moves it to the top, so it's first next time.
-#[tauri::command]
-fn select_clip(app: tauri::AppHandle, window: tauri::WebviewWindow, state: State<AppState>, id: usize) {
-    let text = {
-        let mut engine = state.engine.lock().unwrap();
-        let text = clip_text(engine.history(), id);
-        if text.is_some() {
-            engine.promote(id);
-        }
-        text
-    };
-    copy_and_hide(&app, &window, &state, text);
-}
-
-#[tauri::command]
-fn select_pinned(app: tauri::AppHandle, window: tauri::WebviewWindow, state: State<AppState>, id: usize) {
-    let text = {
-        let engine = state.engine.lock().unwrap();
-        clip_text(engine.pinned(), id)
-    };
-    copy_and_hide(&app, &window, &state, text);
-}
-
-#[tauri::command]
-fn pin_clip(state: State<AppState>, id: usize) -> bool {
-    state.engine.lock().unwrap().pin(id)
-}
-
-#[tauri::command]
-fn unpin_clip(state: State<AppState>, id: usize) -> bool {
-    state.engine.lock().unwrap().unpin(id)
-}
-
-/// Pins text the user wrote in the Pinned popup, rather than copied.
-#[tauri::command]
-fn pin_text(state: State<AppState>, text: String) -> bool {
-    state.engine.lock().unwrap().pin_text(text)
-}
-
-#[tauri::command]
-fn close_popup(window: tauri::WebviewWindow) {
-    let _ = window.hide();
+    menu_targets: Mutex<MenuTargets>,
+    /// A popup menu is modal; a hotkey pressed while one is open is ignored.
+    menu_open: AtomicBool,
 }
 
 fn spawn_capture_thread(app: tauri::AppHandle, mut source: impl ClipboardSource + Send + 'static) {
@@ -157,65 +41,56 @@ fn spawn_capture_thread(app: tauri::AppHandle, mut source: impl ClipboardSource 
         if state.paused.load(Ordering::SeqCst) {
             continue;
         }
+        let mut captured = false;
         while let Some(incoming) = source.next_event() {
-            let mut engine = state.engine.lock().unwrap();
-            engine.capture(incoming);
+            state.engine.lock().unwrap().capture(incoming);
+            captured = true;
+        }
+        if captured {
+            clip_menu::refresh_tray_menu(&app);
         }
     });
 }
 
-fn toggle_window(app: &tauri::AppHandle, label: &str) {
-    if let Some(window) = app.get_webview_window(label) {
-        let currently_visible = window.is_visible().unwrap_or(false);
-        if currently_visible {
-            let _ = window.hide();
-        } else {
-            let state = app.state::<AppState>();
-            state
-                .shown_at
-                .lock()
-                .unwrap()
-                .insert(label.to_string(), Instant::now());
-            #[cfg(windows)]
-            {
-                *state.previous_foreground.lock().unwrap() = clip_windows::foreground_window();
-            }
-            let _ = window.show();
-            let _ = window.set_focus();
-        }
+fn on_hotkey(app: &tauri::AppHandle, action: HotkeyAction) {
+    match action {
+        HotkeyAction::MainMenu => clip_menu::request_popup(app, MenuKind::Main),
+        HotkeyAction::HistoryMenu => clip_menu::request_popup(app, MenuKind::History),
+        HotkeyAction::PinnedMenu => clip_menu::request_popup(app, MenuKind::Pinned),
+        HotkeyAction::ClearHistory => clip_menu::confirm_and_clear_history(app),
     }
 }
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            get_history,
-            get_pinned,
-            select_clip,
-            select_pinned,
-            pin_clip,
-            unpin_clip,
-            pin_text,
-            close_popup,
             settings::get_settings,
             settings::update_settings,
-            settings::set_hotkeys_suspended
+            settings::set_hotkeys_suspended,
+            pinned::list_pinned,
+            pinned::add_pinned,
+            pinned::edit_pinned,
+            pinned::remove_pinned
         ])
         .setup(|app| {
             let settings_state = SettingsState::load(settings::settings_file_path(app));
             let store = SqliteClipStore::open("clipdeck-history.sqlite3");
             let pinned_store = SqlitePinnedStore::open("clipdeck-pinned.sqlite3");
-            let engine = ClipEngine::new(store, pinned_store, settings_state.current().engine_config());
-            let hotkeys = Hotkeys::parse(settings_state.current())
+            let current = settings_state.current().clone();
+            let engine = ClipEngine::new(store, pinned_store, current.engine_config());
+            let hotkeys = Hotkeys::parse(&current)
                 .expect("SettingsState::load only keeps settings with valid hotkeys");
             app.manage(AppState {
                 engine: Mutex::new(engine),
                 paused: AtomicBool::new(false),
-                shown_at: Mutex::new(HashMap::new()),
                 settings: Mutex::new(settings_state),
+                active_settings: Mutex::new(current),
                 hotkeys: Mutex::new(hotkeys),
                 previous_foreground: Mutex::new(0),
+                menu_targets: Mutex::new(MenuTargets::default()),
+                menu_open: AtomicBool::new(false),
             });
 
             #[cfg(windows)]
@@ -223,25 +98,11 @@ fn main() {
             #[cfg(target_os = "macos")]
             spawn_capture_thread(app.handle().clone(), clip_macos::MacClipboardSource::new());
 
-            let settings_item = MenuItem::with_id(app, "settings", "Settings...", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let pause_item =
-                CheckMenuItem::with_id(app, "pause", "Pause capture", true, false, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&settings_item, &pause_item, &quit_item])?;
-
-            TrayIconBuilder::new()
+            // Like Clipy, clicking the tray icon shows the full menu.
+            TrayIconBuilder::with_id(clip_menu::TRAY_ID)
                 .icon(app.default_window_icon().cloned().expect("default window icon missing"))
-                .menu(&menu)
-                .on_menu_event(move |app, event| match event.id.as_ref() {
-                    "settings" => settings::show_settings_window(app),
-                    "quit" => app.exit(0),
-                    "pause" => {
-                        let state = app.state::<AppState>();
-                        let current = state.paused.load(Ordering::SeqCst);
-                        state.paused.store(!current, Ordering::SeqCst);
-                    }
-                    _ => {}
-                })
+                .tooltip("Clipdeck")
+                .menu(&clip_menu::build_initial_tray_menu(app.handle())?)
                 .build(app)?;
 
             app.handle().plugin(
@@ -250,11 +111,9 @@ fn main() {
                         if event.state() != ShortcutState::Pressed {
                             return;
                         }
-                        let hotkeys = *app.state::<AppState>().hotkeys.lock().unwrap();
-                        if shortcut == &hotkeys.history {
-                            toggle_window(app, "history");
-                        } else if shortcut == &hotkeys.pinned {
-                            toggle_window(app, "pinned");
+                        let action = app.state::<AppState>().hotkeys.lock().unwrap().action_for(shortcut);
+                        if let Some(action) = action {
+                            on_hotkey(app, action);
                         }
                     })
                     .build(),
@@ -268,26 +127,15 @@ fn main() {
 
             Ok(())
         })
-        .on_window_event(|window, event| match event {
+        .on_menu_event(|app, event| clip_menu::handle_menu_event(app, event.id.as_ref()))
+        .on_window_event(|window, event| {
             // Closing Settings just hides it, so the app keeps running in the tray.
-            WindowEvent::CloseRequested { api, .. } if window.label() == SETTINGS_WINDOW => {
-                api.prevent_close();
-                let _ = window.hide();
-            }
-            // Only the popups are ephemeral; the Settings Window stays put when it loses focus.
-            WindowEvent::Focused(false) if window.label() != SETTINGS_WINDOW => {
-                let state = window.state::<AppState>();
-                let recently_shown = state
-                    .shown_at
-                    .lock()
-                    .unwrap()
-                    .get(window.label())
-                    .is_some_and(|shown_at| shown_at.elapsed() < SHOW_GRACE_PERIOD);
-                if !recently_shown {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == SETTINGS_WINDOW {
+                    api.prevent_close();
                     let _ = window.hide();
                 }
             }
-            _ => {}
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

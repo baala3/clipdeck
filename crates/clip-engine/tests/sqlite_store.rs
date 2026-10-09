@@ -106,3 +106,34 @@ fn sqlite_pinned_store_reports_whether_it_contains_some_content() {
     assert!(store.contains(&ClipContent::Image(vec![1, 2, 3])));
     assert!(!store.contains(&ClipContent::Image(vec![9])));
 }
+
+#[test]
+fn sqlite_pinned_store_replaces_a_clip_in_place() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("pinned.sqlite3");
+    let mut store = SqlitePinnedStore::open(path.to_str().unwrap());
+    for text in ["one", "two", "three"] {
+        store.push(Clip {
+            content: ClipContent::Text(text.into()),
+            source_app: None,
+        });
+    }
+
+    store.replace(
+        1,
+        Clip {
+            content: ClipContent::Text("TWO".into()),
+            source_app: None,
+        },
+    );
+
+    let texts: Vec<ClipContent> = store.all().into_iter().map(|c| c.content).collect();
+    assert_eq!(
+        texts,
+        vec![
+            ClipContent::Text("one".into()),
+            ClipContent::Text("TWO".into()),
+            ClipContent::Text("three".into())
+        ]
+    );
+}

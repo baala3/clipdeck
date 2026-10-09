@@ -24,13 +24,12 @@ A reusable piece of text the user authors directly, not derived from a copy even
 Still out of scope as a separate concept. Plain user-written text lives in the Pinned list instead (see Pin), which covers the simple case without a second list.
 _Avoid_: Template (for v1 purposes, this concept doesn't exist yet)
 
-**Popup**:
-The ephemeral, hotkey-triggered overlay used to browse and select from History or from the Pinned list. Closes immediately after a selection or on dismiss. Not the main app window.
-Selecting a Clip copies it to the clipboard and (on Windows; see ADR-0005) pastes it directly into whatever was focused before the popup opened.
-_Avoid_: Window, panel (reserve "window" for the Settings Window)
+**Menu**:
+The native, Clipy-style menu a global hotkey opens at the mouse cursor: the main menu (History and Pinned together, plus Clear History, Edit Pinned..., Settings..., Quit), or History or Pinned alone. Items are numbered and shortened to one line; past the first few they're grouped into "11 - 20" style folders. Choosing an item copies it and, on Windows, pastes it into whatever was focused before the menu opened (ADR-0005; macOS only copies). Holding the delete or pin modifier while choosing deletes or pins it instead. The tray icon shows the same main menu. See ADR-0006.
+_Avoid_: Popup, window, panel (reserve "window" for the Settings Window)
 
 **Settings Window**:
-The only persistent, full application window. Opened via the tray/menu-bar icon (or a dedicated command) - never opened just to browse or paste Clips. Houses all end-user-facing configuration (hotkeys, History capacity, exclusion list, encryption toggle, theme).
+The only persistent, full application window. Opened from the Menu's "Settings..." or "Edit Pinned..." items - never opened just to browse or paste Clips. Houses all end-user-facing configuration (hotkeys, Menu layout and modifiers, History capacity, exclusion list, encryption toggle) and is where pinned items are written and edited.
 _Avoid_: Preferences pane, main window
 
 **Exclusion list**:

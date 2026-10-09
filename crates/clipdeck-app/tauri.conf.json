@@ -10,26 +10,15 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "label": "history",
-        "url": "index.html",
-        "title": "Clipdeck History",
-        "width": 420,
-        "height": 480,
+        "label": "menu-host",
+        "url": "menu-host.html",
+        "title": "Clipdeck",
+        "width": 1,
+        "height": 1,
         "visible": false,
         "decorations": false,
         "skipTaskbar": true,
-        "alwaysOnTop": true
-      },
-      {
-        "label": "pinned",
-        "url": "index.html?mode=pinned",
-        "title": "Clipdeck Pinned",
-        "width": 420,
-        "height": 480,
-        "visible": false,
-        "decorations": false,
-        "skipTaskbar": true,
-        "alwaysOnTop": true
+        "focus": false
       },
       {
         "label": "settings",
@@ -46,6 +35,8 @@
   },
   "bundle": {
     "active": true,
-    "icon": ["icons/icon.png"]
+    "icon": [
+      "icons/icon.png"
+    ]
   }
 }

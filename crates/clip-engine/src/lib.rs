@@ -1,8 +1,9 @@
 use rusqlite::Connection;
 use std::collections::HashSet;
 
+pub mod menu;
 mod settings;
-pub use settings::{Settings, SettingsError, SettingsFile};
+pub use settings::{Settings, SettingsError, SettingsFile, ShortcutModifier};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClipContent {
@@ -76,6 +77,8 @@ pub trait ClipStore {
 pub trait PinnedStore {
     fn push(&mut self, clip: Clip);
     fn remove(&mut self, index: usize);
+    /// Swaps the Clip at `index` for `clip`, keeping its position.
+    fn replace(&mut self, index: usize, clip: Clip);
     fn all(&self) -> Vec<Clip>;
 
     fn contains(&self, content: &ClipContent) -> bool {
@@ -126,6 +129,21 @@ impl<S: ClipStore, P: PinnedStore> ClipEngine<S, P> {
                 source_app: None,
             });
         }
+        true
+    }
+
+    /// Replaces a pinned item's text, keeping its position. Blank text is rejected.
+    pub fn update_pinned(&mut self, pinned_index: usize, text: String) -> bool {
+        if text.trim().is_empty() || pinned_index >= self.pinned_store.all().len() {
+            return false;
+        }
+        self.pinned_store.replace(
+            pinned_index,
+            Clip {
+                content: ClipContent::Text(text),
+                source_app: None,
+            },
+        );
         true
     }
 
@@ -205,6 +223,23 @@ impl<S: ClipStore, P: PinnedStore> ClipEngine<S, P> {
                 true
             }
             None => false,
+        }
+    }
+
+    /// Removes one Clip from History. `history_index` is chronological (0 = oldest).
+    pub fn delete(&mut self, history_index: usize) -> bool {
+        if history_index < self.store.len() {
+            self.store.remove(history_index);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Empties History. The Pinned list is untouched.
+    pub fn clear_history(&mut self) {
+        while !self.store.is_empty() {
+            self.store.evict_oldest();
         }
     }
 
@@ -295,6 +330,20 @@ impl PinnedStore for SqlitePinnedStore {
                 (&text, &image, &clip.source_app),
             )
             .expect("failed to insert pinned clip");
+    }
+
+    fn replace(&mut self, index: usize, clip: Clip) {
+        let (text, image) = match clip.content {
+            ClipContent::Text(text) => (Some(text), None),
+            ClipContent::Image(bytes) => (None, Some(bytes)),
+        };
+        self.conn
+            .execute(
+                "UPDATE pinned_clips SET text = ?1, image = ?2, source_app = ?3
+                 WHERE id = (SELECT id FROM pinned_clips ORDER BY id ASC LIMIT 1 OFFSET ?4)",
+                (&text, &image, &clip.source_app, index as i64),
+            )
+            .expect("failed to replace pinned clip");
     }
 
     fn remove(&mut self, index: usize) {

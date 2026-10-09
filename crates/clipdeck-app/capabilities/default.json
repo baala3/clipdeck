@@ -1,7 +1,7 @@
 {
   "identifier": "main",
   "description": "Default permissions for clipdeck",
-  "windows": ["history", "pinned", "settings"],
+  "windows": ["settings"],
   "permissions": [
     "core:default",
     "clipboard-manager:allow-write-text",
