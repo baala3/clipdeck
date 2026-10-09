@@ -11,6 +11,7 @@ This deliberately reverses earlier decisions:
 - **Type-to-filter search is gone.**
   A native menu has no text field; Clipy has no search either.
 - **The tray icon shows the main menu**, as Clipy's status item does, instead of opening the Settings Window (the v1 spec's user story 22).
+  Unlike Clipy, the History-only and Pinned-only menus also end with the app actions (Clear History, Edit Pinned..., Settings..., Pause capture, Quit), so every hotkey reaches them.
   Settings opens from the menu's "Settings..." item.
 - **Pinning and writing pinned text moved.**
   A modifier+click on a History item pins it, and pinned items are written, edited, and removed in a Pinned section of the Settings Window, the counterpart of Clipy's "Edit Snippets" window.

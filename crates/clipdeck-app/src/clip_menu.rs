@@ -19,12 +19,10 @@ pub const TRAY_ID: &str = "main";
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum MenuKind {
-    /// History and Pinned together, plus the app actions (Clipy's main menu).
+    /// History and Pinned together (Clipy's main menu); also the tray menu.
     Main,
     History,
     Pinned,
-    /// The main menu with the tray-only extras (Pause capture).
-    Tray,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -148,17 +146,15 @@ fn build(app: &AppHandle, kind: MenuKind, snap: &Snapshot, id_prefix: &str) -> t
         section("Pinned", List::Pinned, &snap.pinned, kind == MenuKind::Pinned)?;
         menu.append(&MenuItem::with_id(app, NEW_PINNED, "New Item...", true, None::<&str>)?)?;
     }
-    if matches!(kind, MenuKind::Main | MenuKind::Tray) {
-        menu.append(&PredefinedMenuItem::separator(app)?)?;
-        menu.append(&MenuItem::with_id(app, CLEAR_HISTORY, "Clear History", !snap.history.is_empty(), None::<&str>)?)?;
-        menu.append(&MenuItem::with_id(app, EDIT_PINNED, "Edit Pinned...", true, None::<&str>)?)?;
-        menu.append(&MenuItem::with_id(app, SETTINGS, "Settings...", true, None::<&str>)?)?;
-        if kind == MenuKind::Tray {
-            menu.append(&CheckMenuItem::with_id(app, PAUSE, "Pause capture", true, snap.paused, None::<&str>)?)?;
-        }
-        menu.append(&PredefinedMenuItem::separator(app)?)?;
-        menu.append(&MenuItem::with_id(app, QUIT, "Quit Clipdeck", true, None::<&str>)?)?;
-    }
+    // Every menu ends with the app actions, so they're reachable from any
+    // hotkey, not just the tray icon.
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    menu.append(&MenuItem::with_id(app, CLEAR_HISTORY, "Clear History", !snap.history.is_empty(), None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(app, EDIT_PINNED, "Edit Pinned...", true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(app, SETTINGS, "Settings...", true, None::<&str>)?)?;
+    menu.append(&CheckMenuItem::with_id(app, PAUSE, "Pause capture", true, snap.paused, None::<&str>)?)?;
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    menu.append(&MenuItem::with_id(app, QUIT, "Quit Clipdeck", true, None::<&str>)?)?;
     Ok(BuiltMenu {
         menu,
         targets: built_targets,
@@ -248,7 +244,7 @@ pub fn refresh_tray_menu(app: &AppHandle) {
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         let snap = snapshot(&handle);
-        match build(&handle, MenuKind::Tray, &snap, "t:") {
+        match build(&handle, MenuKind::Main, &snap, "t:") {
             Ok(built) => {
                 handle.state::<AppState>().menu_targets.lock().unwrap().tray = built.targets;
                 if let Some(tray) = handle.tray_by_id(TRAY_ID) {
@@ -263,7 +259,7 @@ pub fn refresh_tray_menu(app: &AppHandle) {
 }
 
 pub fn build_initial_tray_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
-    let built = build(app, MenuKind::Tray, &snapshot(app), "t:")?;
+    let built = build(app, MenuKind::Main, &snapshot(app), "t:")?;
     app.state::<AppState>().menu_targets.lock().unwrap().tray = built.targets;
     Ok(built.menu)
 }
