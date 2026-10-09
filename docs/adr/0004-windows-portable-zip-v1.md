@@ -12,4 +12,4 @@ This fits Clipdeck's own stated values (lightweight, developer-friendly) better 
 
 This doesn't block revisiting a proper NSIS/MSI installer later - the toolchain pieces we discovered (`cargo-xwin`, `clang`, `lld`, `llvm`, `nsis`) are now known and documented here if that's picked back up.
 
-**Status**: accepted
+**Status**: superseded by [ADR-0007](0007-ci-built-installers-with-auto-update.md)

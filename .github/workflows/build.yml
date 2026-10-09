@@ -1,0 +1,112 @@
+name: Build
+
+# Every push and PR is linted, tested, and bundled on real Windows and macOS
+# runners. Pushing a version tag (v0.2.0) also publishes the bundles, plus the
+# latest.json the in-app updater reads, as a draft GitHub Release to review
+# and publish by hand. See docs/RELEASING.md.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  # Must stay compatible with the tauri crate version in Cargo.lock.
+  TAURI_CLI: "@tauri-apps/cli@2.12.1"
+
+jobs:
+  engine:
+    name: Engine (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+
+  app:
+    name: App (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            platform_crate: clip-windows
+            rust_targets: ""
+            bundle_args: --bundles nsis
+            bundles: target/release/bundle/nsis/*.exe
+          - name: macOS
+            os: macos-latest
+            platform_crate: clip-macos
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
+            bundle_args: --target universal-apple-darwin --bundles app,dmg
+            bundles: target/universal-apple-darwin/release/bundle/dmg/*.dmg
+    runs-on: ${{ matrix.os }}
+    env:
+      # Signs the update bundles. Not available to PRs from forks, which are
+      # still linted and tested but not bundled.
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+          targets: ${{ matrix.rust_targets }}
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check the tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "clipdeck-app") | .version')
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match clipdeck-app's version $version"
+            exit 1
+          fi
+
+      - run: cargo clippy -p clipdeck-app -p ${{ matrix.platform_crate }} --all-targets -- -D warnings
+      - run: cargo test -p ${{ matrix.platform_crate }}
+
+      - name: Bundle
+        if: env.TAURI_SIGNING_PRIVATE_KEY != ''
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: crates/clipdeck-app
+          tauriScript: npx --yes ${{ env.TAURI_CLI }}
+          args: ${{ matrix.bundle_args }}
+          # Empty unless this is a version tag, in which case the bundles go
+          # to a draft release instead of only being built.
+          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          releaseName: Clipdeck __VERSION__
+          releaseBody: |
+            Download `Clipdeck_<version>_x64-setup.exe` for Windows or `Clipdeck_<version>_universal.dmg` for macOS.
+            These builds are unsigned, so see the [install guide](https://github.com/baala3/clipdeck/blob/main/docs/INSTALL.md) for the one-time first-launch steps.
+            Already installed? Clipdeck updates itself.
+          releaseDraft: true
+          includeUpdaterJson: true
+
+      - name: Upload bundles
+        if: env.TAURI_SIGNING_PRIVATE_KEY != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: clipdeck-${{ matrix.name }}
+          path: ${{ matrix.bundles }}
+          if-no-files-found: error
