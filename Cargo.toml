@@ -1,3 +1,14 @@
 [workspace]
 resolver = "2"
-members = ["crates/clip-engine"]
+members = [
+    "crates/clip-engine",
+    "crates/clip-windows",
+    "crates/clip-macos",
+    "crates/clipdeck-app",
+]
+# clipdeck-app needs a native GUI toolchain for whatever OS it targets (GTK/webkit2gtk
+# on Linux, which this dev machine doesn't have installed, and isn't a shipping target
+# per ADR-0001 anyway). Keep plain `cargo build`/`cargo test` fast and green on this
+# Linux dev box by defaulting to just the cross-platform-pure members; build/test
+# clipdeck-app explicitly with `-p clipdeck-app --target <windows-or-macos-target>`.
+default-members = ["crates/clip-engine", "crates/clip-windows", "crates/clip-macos"]

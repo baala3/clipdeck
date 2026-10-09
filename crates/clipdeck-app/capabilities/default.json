@@ -1,0 +1,10 @@
+{
+  "identifier": "main",
+  "description": "Default permissions for clipdeck",
+  "windows": ["history"],
+  "permissions": [
+    "core:default",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-read-text"
+  ]
+}

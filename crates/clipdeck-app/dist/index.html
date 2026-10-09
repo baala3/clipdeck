@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Clipdeck History</title>
+<style>
+  body { margin: 0; font-family: sans-serif; background: #1e1e1e; color: #eee; }
+  ul#list { list-style: none; margin: 0; padding: 0; max-height: 100vh; overflow-y: auto; }
+  ul#list li { padding: 8px 12px; cursor: pointer; white-space: pre; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid #333; }
+  ul#list li.selected { background: #2a7a7a; color: #fff; }
+</style>
+</head>
+<body>
+<ul id="list"></ul>
+<script>
+const { invoke } = window.__TAURI__.core;
+let items = [];
+let selected = 0;
+
+function render() {
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  items.forEach((item, i) => {
+    const li = document.createElement('li');
+    li.textContent = item.text;
+    if (i === selected) li.classList.add('selected');
+    li.onclick = () => choose(i);
+    list.appendChild(li);
+  });
+}
+
+async function refresh() {
+  items = await invoke('get_history');
+  selected = 0;
+  render();
+}
+
+function choose(i) {
+  invoke('select_clip', { index: i });
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') {
+    selected = Math.min(selected + 1, items.length - 1);
+    render();
+  } else if (e.key === 'ArrowUp') {
+    selected = Math.max(selected - 1, 0);
+    render();
+  } else if (e.key === 'Enter') {
+    choose(selected);
+  } else if (e.key === 'Escape') {
+    invoke('close_popup');
+  }
+});
+
+window.addEventListener('focus', refresh);
+refresh();
+</script>
+</body>
+</html>
