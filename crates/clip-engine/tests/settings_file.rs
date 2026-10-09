@@ -24,7 +24,7 @@ fn loading_a_missing_settings_file_creates_it_with_the_defaults() {
             delete_modifier: ShortcutModifier::Alt,
             pin_modifier: ShortcutModifier::Shift,
             menu_title_length: 20,
-            menu_items_inline: 0,
+            menu_items_inline: 10,
             menu_items_per_folder: 10,
         }
     );

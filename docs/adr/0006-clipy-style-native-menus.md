@@ -3,7 +3,8 @@
 Clipdeck's History and Pinned popups were webview windows: a scrollable list with a type-to-filter search box (Ticket 4), pin icons, and a box for writing pinned text.
 The user, a long-time Clipy user, asked to copy Clipy's UI and behavior instead.
 We read Clipy's own source (`MenuManager.swift`, `HotKeyService.swift`, `CPYUtilities.swift`) and matched it: global hotkeys open a native OS menu at the mouse cursor, items are numbered and cut to their first line (20 characters by default), they're grouped into "1 - 10", "11 - 20" folders, and Cmd/Ctrl+1...0 pick the first ten.
-The defaults follow Clipy's, with Command mapped to Ctrl on Windows: main menu Ctrl/Cmd+Shift+V, History Ctrl/Cmd+Alt+V, Pinned (Clipy's Snippets) Ctrl/Cmd+Shift+B, Clear History unbound.
+One deliberate difference: the first ten items sit directly in the menu and folders start at "11 - 20", where Clipy's default puts every item in a folder; the user wanted the newest Clips one click away (configurable as "Items before folders").
+The other defaults follow Clipy's, with Command mapped to Ctrl on Windows: main menu Ctrl/Cmd+Shift+V, History Ctrl/Cmd+Alt+V, Pinned (Clipy's Snippets) Ctrl/Cmd+Shift+B, Clear History unbound.
 
 This deliberately reverses earlier decisions:
 

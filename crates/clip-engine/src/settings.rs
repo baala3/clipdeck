@@ -35,7 +35,9 @@ pub struct Settings {
 }
 
 impl Default for Settings {
-    /// Mirrors Clipy's defaults, with Clipy's Command key mapped to Ctrl on Windows.
+    /// Mirrors Clipy's defaults, with Clipy's Command key mapped to Ctrl on
+    /// Windows, except that the first ten items sit directly in the menu
+    /// (Clipy puts every item in a folder) so the newest Clips are one click away.
     fn default() -> Self {
         Self {
             main_hotkey: "CommandOrControl+Shift+V".into(),
@@ -48,7 +50,7 @@ impl Default for Settings {
             delete_modifier: ShortcutModifier::Alt,
             pin_modifier: ShortcutModifier::Shift,
             menu_title_length: 20,
-            menu_items_inline: 0,
+            menu_items_inline: 10,
             menu_items_per_folder: 10,
         }
     }
