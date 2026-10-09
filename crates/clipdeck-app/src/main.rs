@@ -56,7 +56,7 @@ fn get_pinned(state: State<AppState>) -> Vec<ClipDto> {
     text_pinned(&engine)
 }
 
-fn copy_and_hide(app: &tauri::AppHandle, window: &tauri::Window, text: Option<String>) {
+fn copy_and_hide(app: &tauri::AppHandle, window: &tauri::WebviewWindow, text: Option<String>) {
     if let Some(text) = text {
         if let Err(err) = app.clipboard().write_text(text) {
             eprintln!("copy_and_hide: failed to write clipboard: {err}");
@@ -66,7 +66,7 @@ fn copy_and_hide(app: &tauri::AppHandle, window: &tauri::Window, text: Option<St
 }
 
 #[tauri::command]
-fn select_clip(app: tauri::AppHandle, window: tauri::Window, state: State<AppState>, index: usize) {
+fn select_clip(app: tauri::AppHandle, window: tauri::WebviewWindow, state: State<AppState>, index: usize) {
     let text = {
         let engine = state.engine.lock().unwrap();
         text_history(&engine).get(index).map(|c| c.text.clone())
@@ -75,7 +75,7 @@ fn select_clip(app: tauri::AppHandle, window: tauri::Window, state: State<AppSta
 }
 
 #[tauri::command]
-fn select_pinned(app: tauri::AppHandle, window: tauri::Window, state: State<AppState>, index: usize) {
+fn select_pinned(app: tauri::AppHandle, window: tauri::WebviewWindow, state: State<AppState>, index: usize) {
     let text = {
         let engine = state.engine.lock().unwrap();
         text_pinned(&engine).get(index).map(|c| c.text.clone())
@@ -106,7 +106,7 @@ fn unpin_clip(state: State<AppState>, index: usize) -> bool {
 }
 
 #[tauri::command]
-fn close_popup(window: tauri::Window) {
+fn close_popup(window: tauri::WebviewWindow) {
     let _ = window.hide();
 }
 

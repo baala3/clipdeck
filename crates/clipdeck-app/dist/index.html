@@ -55,13 +55,18 @@ async function refresh() {
 }
 
 function choose(pos) {
-  invoke(mode === 'pinned' ? 'select_pinned' : 'select_clip', { index: filteredIndices[pos] });
+  invoke(mode === 'pinned' ? 'select_pinned' : 'select_clip', { index: filteredIndices[pos] })
+    .catch((err) => console.error('select failed:', err));
 }
 
 async function togglePin(pos) {
   if (filteredIndices.length === 0) return;
-  await invoke(mode === 'pinned' ? 'unpin_clip' : 'pin_clip', { index: filteredIndices[pos] });
-  await refresh();
+  try {
+    await invoke(mode === 'pinned' ? 'unpin_clip' : 'pin_clip', { index: filteredIndices[pos] });
+    await refresh();
+  } catch (err) {
+    console.error('pin/unpin failed:', err);
+  }
 }
 
 searchInput.addEventListener('input', () => {
@@ -87,7 +92,7 @@ searchInput.addEventListener('keydown', (e) => {
     choose(selected);
   } else if (e.key === 'Escape') {
     e.preventDefault();
-    invoke('close_popup');
+    invoke('close_popup').catch((err) => console.error('close_popup failed:', err));
   }
 });
 
