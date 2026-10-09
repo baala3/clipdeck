@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Clipdeck Settings</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f5f7;
+    --panel: #ffffff;
+    --border: #d9d9de;
+    --text: #1d1d1f;
+    --muted: #6e6e73;
+    --accent: #1f7a7a;
+    --accent-text: #ffffff;
+    --kbd-bg: #f0f0f3;
+    --error-bg: #fdecec;
+    --error-border: #f2b8b5;
+    --error-text: #8c1d18;
+    --recording: #fff6d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e1e1e;
+      --panel: #262626;
+      --border: #3a3a3c;
+      --text: #ececec;
+      --muted: #9a9aa0;
+      --accent: #2a9a9a;
+      --accent-text: #ffffff;
+      --kbd-bg: #333336;
+      --error-bg: #3a1f1f;
+      --error-border: #7a3a36;
+      --error-text: #ffb4ab;
+      --recording: #4a3f1a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 20px 24px 24px;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 16px; }
+  h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  section { margin-bottom: 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 14px; }
+  .row + .row { border-top: 1px solid var(--border); }
+  .hint { color: var(--muted); font-size: 12px; margin: 6px 2px 0; }
+  .banner { border: 1px solid var(--error-border); background: var(--error-bg); color: var(--error-text); border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; white-space: pre-wrap; }
+  .banner[hidden] { display: none; }
+  .banner strong { display: block; margin-bottom: 2px; }
+
+  button, input { font: inherit; color: inherit; }
+  input[type="text"], input[type="number"] {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; outline: none;
+  }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+
+  .hotkey { min-width: 180px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 10px; }
+  .hotkey.recording { background: var(--recording); }
+  kbd { font: 12px/1 ui-monospace, "Cascadia Mono", Menlo, monospace; background: var(--kbd-bg); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 3px 6px; }
+
+  #capacity { width: 96px; text-align: right; }
+  .capacity-control { display: flex; align-items: center; gap: 8px; }
+
+  #excluded-list { list-style: none; margin: 0; padding: 0; }
+  #excluded-list li { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 6px 14px; }
+  #excluded-list li + li { border-top: 1px solid var(--border); }
+  #excluded-list .empty { color: var(--muted); padding: 10px 14px; }
+  #excluded-list button { border: none; background: none; color: var(--muted); padding: 4px 8px; font-size: 16px; line-height: 1; }
+  #excluded-list button:hover { color: var(--text); }
+  #exclude-form { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); }
+  #exclude-input { flex: 1; min-width: 0; }
+
+  footer { color: var(--muted); font-size: 12px; }
+  footer code { user-select: all; word-break: break-all; font-family: ui-monospace, "Cascadia Mono", Menlo, monospace; }
+</style>
+</head>
+<body>
+<h1>Settings</h1>
+
+<div id="file-error" class="banner" role="alert" hidden>
+  <strong>The settings file has a problem, so the settings below are still in effect.</strong>
+  <span id="file-error-text"></span>
+</div>
+<div id="action-error" class="banner" role="alert" hidden></div>
+
+<section>
+  <h2>Hotkeys</h2>
+  <div class="panel">
+    <div class="row">
+      <span id="history-label">Open History</span>
+      <button class="hotkey" data-field="history_hotkey" aria-labelledby="history-label"></button>
+    </div>
+    <div class="row">
+      <span id="pinned-label">Open Pinned</span>
+      <button class="hotkey" data-field="pinned_hotkey" aria-labelledby="pinned-label"></button>
+    </div>
+  </div>
+  <p class="hint">Click a shortcut, then press the new key combination. Esc cancels.</p>
+</section>
+
+<section>
+  <h2>History</h2>
+  <div class="panel">
+    <div class="row">
+      <label for="capacity">Clips to keep</label>
+      <span class="capacity-control">
+        <input id="capacity" type="number" min="1" step="1" />
+      </span>
+    </div>
+  </div>
+  <p class="hint" id="capacity-hint"></p>
+</section>
+
+<section>
+  <h2>Excluded apps</h2>
+  <div class="panel">
+    <ul id="excluded-list"></ul>
+    <form id="exclude-form">
+      <input id="exclude-input" type="text" placeholder="App name, e.g. KeePass.exe or 1Password" autocomplete="off" aria-label="App to exclude" />
+      <button class="primary" type="submit">Add</button>
+    </form>
+  </div>
+  <p class="hint">Nothing copied from these apps is captured. Matching ignores case and a trailing ".exe".</p>
+</section>
+
+<footer>
+  These settings are stored in <code id="file-path"></code>.
+  You can also edit that file by hand - changes apply automatically.
+</footer>
+
+<script>
+const { invoke } = window.__TAURI__.core;
+const { listen } = window.__TAURI__.event;
+const isMac = navigator.userAgent.includes('Mac');
+
+const fileErrorBanner = document.getElementById('file-error');
+const actionErrorBanner = document.getElementById('action-error');
+const capacityInput = document.getElementById('capacity');
+const excludedList = document.getElementById('excluded-list');
+const excludeForm = document.getElementById('exclude-form');
+const excludeInput = document.getElementById('exclude-input');
+const hotkeyButtons = document.querySelectorAll('.hotkey');
+
+let view = null;
+let recordingButton = null;
+
+const MAC_SYMBOLS = { CommandOrControl: '⌘', Super: '⌘', Control: '⌃', Alt: '⌥', Shift: '⇧' };
+const PC_NAMES = { CommandOrControl: 'Ctrl', Super: 'Win', Control: 'Ctrl', Alt: 'Alt', Shift: 'Shift' };
+
+function displayToken(token) {
+  const names = isMac ? MAC_SYMBOLS : PC_NAMES;
+  const match = Object.keys(names).find((name) => name.toLowerCase() === token.toLowerCase());
+  if (match) return names[match];
+  return token.replace(/^Key(?=[A-Z]$)/, '').replace(/^Digit(?=\d$)/, '');
+}
+
+function renderHotkey(button, hotkey) {
+  button.replaceChildren(...hotkey.split('+').map((token) => {
+    const kbd = document.createElement('kbd');
+    kbd.textContent = displayToken(token.trim());
+    return kbd;
+  }));
+}
+
+function render() {
+  const { settings, file_path, file_error, max_history_capacity } = view;
+
+  fileErrorBanner.hidden = !file_error;
+  document.getElementById('file-error-text').textContent = file_error || '';
+
+  hotkeyButtons.forEach((button) => {
+    if (button !== recordingButton) renderHotkey(button, settings[button.dataset.field]);
+  });
+
+  capacityInput.max = max_history_capacity;
+  if (document.activeElement !== capacityInput) capacityInput.value = settings.history_capacity;
+  document.getElementById('capacity-hint').textContent =
+    `The oldest Clips are removed once History is full. Up to ${max_history_capacity}. Pinned Clips are never removed.`;
+
+  excludedList.replaceChildren();
+  if (settings.excluded_apps.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'empty';
+    empty.textContent = 'No apps excluded.';
+    excludedList.appendChild(empty);
+  }
+  settings.excluded_apps.forEach((app, i) => {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    name.textContent = app;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = '×';
+    remove.title = `Stop excluding ${app}`;
+    remove.setAttribute('aria-label', `Remove ${app}`);
+    remove.onclick = () => update({ excluded_apps: settings.excluded_apps.filter((_, j) => j !== i) });
+    li.append(name, remove);
+    excludedList.appendChild(li);
+  });
+
+  document.getElementById('file-path').textContent = file_path;
+}
+
+function showActionError(message) {
+  actionErrorBanner.hidden = !message;
+  actionErrorBanner.textContent = message || '';
+}
+
+async function update(patch) {
+  try {
+    view = await invoke('update_settings', { settings: { ...view.settings, ...patch } });
+    showActionError(null);
+  } catch (err) {
+    showActionError(String(err));
+  }
+  render();
+}
+
+// Hotkey recording. Global hotkeys are suspended meanwhile so pressing the
+// current combination reaches this page instead of toggling a popup.
+function shortcutFromEvent(e) {
+  const mods = [];
+  if (e.ctrlKey) mods.push(isMac ? 'Control' : 'CommandOrControl');
+  if (e.metaKey) mods.push(isMac ? 'CommandOrControl' : 'Super');
+  if (e.altKey) mods.push('Alt');
+  if (e.shiftKey) mods.push('Shift');
+  const key = e.code.replace(/^Key(?=[A-Z]$)/, '').replace(/^Digit(?=\d$)/, '');
+  return [...mods, key].join('+');
+}
+
+async function startRecording(button) {
+  if (recordingButton) await stopRecording();
+  recordingButton = button;
+  button.classList.add('recording');
+  button.textContent = 'Press a shortcut…';
+  showActionError(null);
+  try {
+    await invoke('set_hotkeys_suspended', { suspended: true });
+  } catch (err) {
+    showActionError(String(err));
+  }
+}
+
+async function stopRecording(newHotkey) {
+  const button = recordingButton;
+  if (!button) return;
+  recordingButton = null;
+  button.classList.remove('recording');
+  try {
+    await invoke('set_hotkeys_suspended', { suspended: false });
+  } catch (err) {
+    showActionError(String(err));
+  }
+  if (newHotkey) {
+    await update({ [button.dataset.field]: newHotkey });
+  } else {
+    render();
+  }
+}
+
+hotkeyButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    if (recordingButton === button) stopRecording();
+    else startRecording(button);
+  });
+  button.addEventListener('blur', () => {
+    if (recordingButton === button) stopRecording();
+  });
+});
+
+window.addEventListener('keydown', (e) => {
+  if (!recordingButton) return;
+  e.preventDefault();
+  if (e.key === 'Escape' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+    stopRecording();
+    return;
+  }
+  if (/^(Control|Shift|Alt|Meta|OS)(Left|Right)?$/.test(e.code)) {
+    const held = shortcutFromEvent(e).split('+').slice(0, -1);
+    if (held.length) renderHotkey(recordingButton, held.join('+') + '+…');
+    return;
+  }
+  stopRecording(shortcutFromEvent(e));
+});
+
+capacityInput.addEventListener('change', () => {
+  const value = Number(capacityInput.value);
+  const max = view.max_history_capacity;
+  if (!Number.isInteger(value) || value < 1 || value > max) {
+    showActionError(`Clips to keep must be a whole number from 1 to ${max}.`);
+    capacityInput.value = view.settings.history_capacity;
+    return;
+  }
+  update({ history_capacity: value });
+});
+capacityInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') capacityInput.blur();
+});
+
+excludeForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const app = excludeInput.value.trim();
+  if (!app) return;
+  const existing = view.settings.excluded_apps;
+  if (existing.some((entry) => entry.toLowerCase() === app.toLowerCase())) {
+    showActionError(`${app} is already excluded.`);
+    return;
+  }
+  excludeInput.value = '';
+  update({ excluded_apps: [...existing, app] });
+});
+
+listen('settings-changed', (event) => {
+  view = event.payload;
+  render();
+});
+
+invoke('get_settings')
+  .then((initial) => { view = initial; render(); })
+  .catch((err) => showActionError(`Couldn't load settings: ${err}`));
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 use clip_engine::{
     CaptureOutcome, Clip, ClipContent, ClipEngine, ClipStore, ClipboardSource, EngineConfig,
-    IncomingClip, PinnedStore,
+    IncomingClip, PinnedStore, Settings,
 };
 use std::collections::VecDeque;
 
@@ -193,4 +193,68 @@ fn capturing_a_text_clip_makes_it_appear_in_history() {
     let history = engine.history();
     assert_eq!(history.len(), 1);
     assert_eq!(history[0].content, ClipContent::Text("hello world".into()));
+}
+
+#[test]
+fn lowering_history_capacity_at_runtime_evicts_the_oldest_clips_immediately() {
+    let config = EngineConfig {
+        history_capacity: 5,
+        excluded_apps: Default::default(),
+    };
+    let mut engine = ClipEngine::new(InMemoryStore::default(), InMemoryPinnedStore::default(), config);
+    for text in ["one", "two", "three", "four"] {
+        engine.capture(text_clip(text));
+    }
+
+    engine.reconfigure(EngineConfig {
+        history_capacity: 2,
+        excluded_apps: Default::default(),
+    });
+
+    let history = engine.history();
+    assert_eq!(engine.history_capacity(), 2);
+    assert_eq!(
+        history.iter().map(|c| c.content.clone()).collect::<Vec<_>>(),
+        vec![ClipContent::Text("three".into()), ClipContent::Text("four".into())]
+    );
+}
+
+#[test]
+fn exclusion_entries_match_source_apps_ignoring_case_and_a_windows_exe_suffix() {
+    let config = EngineConfig {
+        history_capacity: 200,
+        excluded_apps: ["keepass".to_string(), "Bitwarden.exe".to_string()].into(),
+    };
+    let mut engine = ClipEngine::new(InMemoryStore::default(), InMemoryPinnedStore::default(), config);
+
+    let from = |app: &str| IncomingClip {
+        content: ClipContent::Text("secret".into()),
+        source_app: Some(app.into()),
+        concealed: false,
+    };
+
+    assert_eq!(engine.capture(from("KeePass.exe")), CaptureOutcome::Dropped);
+    assert_eq!(engine.capture(from("KEEPASS")), CaptureOutcome::Dropped);
+    assert_eq!(engine.capture(from("bitwarden")), CaptureOutcome::Dropped);
+    assert_eq!(engine.capture(from("KeePassXC.exe")), CaptureOutcome::Captured);
+    assert_eq!(engine.history().len(), 1);
+}
+
+#[test]
+fn an_engine_reconfigured_from_settings_applies_their_capacity_and_exclusions() {
+    let mut engine = ClipEngine::new(
+        InMemoryStore::default(),
+        InMemoryPinnedStore::default(),
+        EngineConfig::default(),
+    );
+    let settings = Settings {
+        history_capacity: 1,
+        excluded_apps: vec!["TextEdit".into()],
+        ..Settings::default()
+    };
+
+    engine.reconfigure(settings.engine_config());
+
+    assert_eq!(engine.history_capacity(), 1);
+    assert_eq!(engine.capture(text_clip("from TextEdit")), CaptureOutcome::Dropped);
 }

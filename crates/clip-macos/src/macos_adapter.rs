@@ -15,7 +15,7 @@
 
 use clip_engine::{ClipContent, ClipboardSource, IncomingClip};
 use objc2::rc::autoreleasepool;
-use objc2_app_kit::NSPasteboard;
+use objc2_app_kit::{NSPasteboard, NSWorkspace};
 use objc2_foundation::ns_string;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -72,7 +72,7 @@ fn poll_loop(queue: Arc<Mutex<VecDeque<IncomingClip>>>) {
             let concealed = is_concealed(&pasteboard);
             queue.lock().unwrap().push_back(IncomingClip {
                 content: ClipContent::Text(text),
-                source_app: None,
+                source_app: frontmost_app_name(),
                 concealed,
             });
         });
@@ -94,4 +94,14 @@ unsafe fn is_concealed(pasteboard: &NSPasteboard) -> bool {
         let s = t.to_string();
         s == CONCEALED_TYPE || s == TRANSIENT_TYPE
     })
+}
+
+/// NSPasteboard doesn't record which app wrote to it, so approximate the
+/// source app with the frontmost app at the time the change is noticed. This
+/// can be wrong if the user switches apps within one poll interval.
+unsafe fn frontmost_app_name() -> Option<String> {
+    NSWorkspace::sharedWorkspace()
+        .frontmostApplication()?
+        .localizedName()
+        .map(|name| name.to_string())
 }

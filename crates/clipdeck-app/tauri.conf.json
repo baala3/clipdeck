@@ -30,6 +30,17 @@
         "decorations": false,
         "skipTaskbar": true,
         "alwaysOnTop": true
+      },
+      {
+        "label": "settings",
+        "url": "settings.html",
+        "title": "Clipdeck Settings",
+        "width": 560,
+        "height": 640,
+        "minWidth": 440,
+        "minHeight": 480,
+        "center": true,
+        "visible": false
       }
     ]
   },

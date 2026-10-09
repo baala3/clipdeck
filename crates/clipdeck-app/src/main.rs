@@ -1,9 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use clip_engine::{
-    ClipContent, ClipEngine, ClipboardSource, EngineConfig, SqliteClipStore, SqlitePinnedStore,
-};
+mod settings;
+
+use clip_engine::{ClipContent, ClipEngine, ClipboardSource, SqliteClipStore, SqlitePinnedStore};
 use serde::Serialize;
+use settings::{Hotkeys, SettingsState, SETTINGS_WINDOW};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -12,7 +13,7 @@ use tauri::menu::{CheckMenuItem, Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{Manager, State, WindowEvent};
 use tauri_plugin_clipboard_manager::ClipboardExt;
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::ShortcutState;
 
 /// Spurious blur events can fire right after `window.show()` + `window.set_focus()`
 /// (a known Tauri/WebView2 race), so hide-on-blur ignores any blur within this
@@ -28,6 +29,9 @@ struct AppState {
     engine: Mutex<ClipEngine<SqliteClipStore, SqlitePinnedStore>>,
     paused: AtomicBool,
     shown_at: Mutex<HashMap<String, Instant>>,
+    settings: Mutex<SettingsState>,
+    /// The hotkeys currently in effect, read by the global shortcut handler.
+    hotkeys: Mutex<Hotkeys>,
 }
 
 fn as_text_dtos(clips: Vec<clip_engine::Clip>) -> Vec<ClipDto> {
@@ -151,18 +155,8 @@ fn toggle_window(app: &tauri::AppHandle, label: &str) {
 }
 
 fn main() {
-    let store = SqliteClipStore::open("clipdeck-history.sqlite3");
-    let pinned_store = SqlitePinnedStore::open("clipdeck-pinned.sqlite3");
-    let engine = ClipEngine::new(store, pinned_store, EngineConfig::default());
-    let state = AppState {
-        engine: Mutex::new(engine),
-        paused: AtomicBool::new(false),
-        shown_at: Mutex::new(HashMap::new()),
-    };
-
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
-        .manage(state)
         .invoke_handler(tauri::generate_handler![
             get_history,
             get_pinned,
@@ -170,23 +164,42 @@ fn main() {
             select_pinned,
             pin_clip,
             unpin_clip,
-            close_popup
+            close_popup,
+            settings::get_settings,
+            settings::update_settings,
+            settings::set_hotkeys_suspended
         ])
         .setup(|app| {
+            let settings_state = SettingsState::load(settings::settings_file_path(app));
+            let store = SqliteClipStore::open("clipdeck-history.sqlite3");
+            let pinned_store = SqlitePinnedStore::open("clipdeck-pinned.sqlite3");
+            let engine = ClipEngine::new(store, pinned_store, settings_state.current().engine_config());
+            let hotkeys = Hotkeys::parse(settings_state.current())
+                .expect("SettingsState::load only keeps settings with valid hotkeys");
+            app.manage(AppState {
+                engine: Mutex::new(engine),
+                paused: AtomicBool::new(false),
+                shown_at: Mutex::new(HashMap::new()),
+                settings: Mutex::new(settings_state),
+                hotkeys: Mutex::new(hotkeys),
+            });
+
             #[cfg(windows)]
             spawn_capture_thread(app.handle().clone(), clip_windows::WindowsClipboardSource::new());
             #[cfg(target_os = "macos")]
             spawn_capture_thread(app.handle().clone(), clip_macos::MacClipboardSource::new());
 
+            let settings_item = MenuItem::with_id(app, "settings", "Settings...", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let pause_item =
                 CheckMenuItem::with_id(app, "pause", "Pause capture", true, false, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&pause_item, &quit_item])?;
+            let menu = Menu::with_items(app, &[&settings_item, &pause_item, &quit_item])?;
 
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().cloned().expect("default window icon missing"))
                 .menu(&menu)
                 .on_menu_event(move |app, event| match event.id.as_ref() {
+                    "settings" => settings::show_settings_window(app),
                     "quit" => app.exit(0),
                     "pause" => {
                         let state = app.state::<AppState>();
@@ -197,29 +210,38 @@ fn main() {
                 })
                 .build(app)?;
 
-            let history_shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyV);
-            let pinned_shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyP);
             app.handle().plugin(
                 tauri_plugin_global_shortcut::Builder::new()
-                    .with_handler(move |app, shortcut, event| {
+                    .with_handler(|app, shortcut, event| {
                         if event.state() != ShortcutState::Pressed {
                             return;
                         }
-                        if shortcut == &history_shortcut {
+                        let hotkeys = *app.state::<AppState>().hotkeys.lock().unwrap();
+                        if shortcut == &hotkeys.history {
                             toggle_window(app, "history");
-                        } else if shortcut == &pinned_shortcut {
+                        } else if shortcut == &hotkeys.pinned {
                             toggle_window(app, "pinned");
                         }
                     })
                     .build(),
             )?;
-            app.global_shortcut().register(history_shortcut)?;
-            app.global_shortcut().register(pinned_shortcut)?;
+            // A hotkey another app already owns shouldn't stop Clipdeck starting;
+            // the user can pick a different one in Settings.
+            if let Err(err) = settings::register_initial_hotkeys(app.handle()) {
+                eprintln!("{err}");
+            }
+            settings::spawn_file_watcher(app.handle().clone());
 
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let WindowEvent::Focused(false) = event {
+        .on_window_event(|window, event| match event {
+            // Closing Settings just hides it, so the app keeps running in the tray.
+            WindowEvent::CloseRequested { api, .. } if window.label() == SETTINGS_WINDOW => {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+            // Only the popups are ephemeral; the Settings Window stays put when it loses focus.
+            WindowEvent::Focused(false) if window.label() != SETTINGS_WINDOW => {
                 let state = window.state::<AppState>();
                 let recently_shown = state
                     .shown_at
@@ -231,6 +253,7 @@ fn main() {
                     let _ = window.hide();
                 }
             }
+            _ => {}
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

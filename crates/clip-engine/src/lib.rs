@@ -1,6 +1,9 @@
 use rusqlite::Connection;
 use std::collections::HashSet;
 
+mod settings;
+pub use settings::{Settings, SettingsError, SettingsFile};
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClipContent {
     Text(String),
@@ -26,7 +29,7 @@ pub enum CaptureOutcome {
 }
 
 pub const MAX_HISTORY_CAPACITY: usize = 2000;
-const DEFAULT_HISTORY_CAPACITY: usize = 200;
+pub(crate) const DEFAULT_HISTORY_CAPACITY: usize = 200;
 
 pub struct EngineConfig {
     pub history_capacity: usize,
@@ -39,6 +42,17 @@ impl Default for EngineConfig {
             history_capacity: DEFAULT_HISTORY_CAPACITY,
             excluded_apps: HashSet::new(),
         }
+    }
+}
+
+/// App names are compared case-insensitively and without a trailing `.exe`, so
+/// an exclusion entry typed as "keepass" matches a Windows source app reported
+/// as "KeePass.exe".
+fn normalize_app_name(name: &str) -> String {
+    let lower = name.trim().to_lowercase();
+    match lower.strip_suffix(".exe") {
+        Some(stem) => stem.to_string(),
+        None => lower,
     }
 }
 
@@ -106,7 +120,13 @@ impl<S: ClipStore, P: PinnedStore> ClipEngine<S, P> {
             return CaptureOutcome::Dropped;
         }
         if let Some(app) = &incoming.source_app {
-            if self.config.excluded_apps.contains(app) {
+            let app = normalize_app_name(app);
+            if self
+                .config
+                .excluded_apps
+                .iter()
+                .any(|excluded| normalize_app_name(excluded) == app)
+            {
                 return CaptureOutcome::Dropped;
             }
         }
@@ -114,10 +134,22 @@ impl<S: ClipStore, P: PinnedStore> ClipEngine<S, P> {
             content: incoming.content,
             source_app: incoming.source_app,
         });
-        if self.store.len() > self.history_capacity() {
+        self.evict_down_to_capacity();
+        CaptureOutcome::Captured
+    }
+
+    /// Swaps in a new config at runtime (e.g. after the user edits Settings).
+    /// Lowering the capacity evicts the oldest Clips right away rather than
+    /// waiting for the next capture.
+    pub fn reconfigure(&mut self, config: EngineConfig) {
+        self.config = config;
+        self.evict_down_to_capacity();
+    }
+
+    fn evict_down_to_capacity(&mut self) {
+        while self.store.len() > self.history_capacity() {
             self.store.evict_oldest();
         }
-        CaptureOutcome::Captured
     }
 
     pub fn history(&self) -> Vec<Clip> {

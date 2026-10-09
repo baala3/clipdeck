@@ -3,16 +3,20 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::thread;
 
-use windows::core::w;
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+use windows::core::{w, PWSTR};
+use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::DataExchange::{
-    AddClipboardFormatListener, CloseClipboard, GetClipboardData, OpenClipboard,
+    AddClipboardFormatListener, CloseClipboard, GetClipboardData, GetClipboardOwner, OpenClipboard,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
 use windows::Win32::System::Ole::CF_UNICODETEXT;
+use windows::Win32::System::Threading::{
+    OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, GetWindowLongPtrW,
+    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetForegroundWindow, GetMessageW,
+    GetWindowLongPtrW, GetWindowThreadProcessId,
     RegisterClassW, SetWindowLongPtrW, TranslateMessage, GWLP_USERDATA, HWND_MESSAGE, MSG,
     WM_CLIPBOARDUPDATE, WNDCLASSW,
 };
@@ -93,7 +97,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     if msg == WM_CLIPBOARDUPDATE {
         let ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut Queue;
         if !ptr.is_null() {
-            if let Some(clip) = read_clipboard_text() {
+            if let Some(clip) = read_clipboard_text(hwnd) {
                 let queue = &*ptr;
                 queue.lock().unwrap().push_back(clip);
             }
@@ -103,8 +107,27 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     DefWindowProcW(hwnd, msg, wparam, lparam)
 }
 
-unsafe fn read_clipboard_text() -> Option<IncomingClip> {
-    OpenClipboard(None).ok()?;
+/// Another process (the app that just copied, or another clipboard tool reacting
+/// to the same change) may still hold the clipboard open, in which case
+/// `OpenClipboard` fails. Retry briefly rather than silently dropping the Clip.
+///
+/// Opens with the listener's own window rather than NULL: a NULL open is not
+/// tied to a window, so a second listener in the same process could close the
+/// clipboard out from under this one mid-read.
+unsafe fn open_clipboard_with_retry(listener: HWND) -> bool {
+    for _ in 0..20 {
+        if OpenClipboard(listener).is_ok() {
+            return true;
+        }
+        thread::sleep(std::time::Duration::from_millis(10));
+    }
+    false
+}
+
+unsafe fn read_clipboard_text(listener: HWND) -> Option<IncomingClip> {
+    if !open_clipboard_with_retry(listener) {
+        return None;
+    }
 
     let text = (|| -> Option<String> {
         let handle = GetClipboardData(CF_UNICODETEXT.0 as u32).ok()?;
@@ -126,7 +149,31 @@ unsafe fn read_clipboard_text() -> Option<IncomingClip> {
 
     text.map(|text| IncomingClip {
         content: ClipContent::Text(text),
-        source_app: None,
+        source_app: source_app_name(),
         concealed: false,
     })
+}
+
+/// The executable name (e.g. "KeePass.exe") of the app that just wrote to the
+/// clipboard, for matching against the exclusion list. Uses the clipboard
+/// owner window, falling back to the foreground window for apps that write
+/// without an owner.
+unsafe fn source_app_name() -> Option<String> {
+    let hwnd = GetClipboardOwner().unwrap_or_else(|_| GetForegroundWindow());
+    if hwnd.is_invalid() {
+        return None;
+    }
+    let mut pid = 0u32;
+    GetWindowThreadProcessId(hwnd, Some(&mut pid));
+    if pid == 0 {
+        return None;
+    }
+    let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+    let mut buf = [0u16; 1024];
+    let mut len = buf.len() as u32;
+    let queried = QueryFullProcessImageNameW(process, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut len);
+    let _ = CloseHandle(process);
+    queried.ok()?;
+    let path = String::from_utf16_lossy(&buf[..len as usize]);
+    path.rsplit('\\').next().map(str::to_string)
 }
