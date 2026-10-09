@@ -141,12 +141,9 @@ fn main() {
             spawn_capture_thread(app.handle().clone(), clip_macos::MacClipboardSource::new());
 
             // Like Clipy, clicking the tray icon shows the full menu.
+            // The tray gets its own simplified icon, drawn to stay legible at 16px.
             TrayIconBuilder::with_id(clip_menu::TRAY_ID)
-                .icon(
-                    app.default_window_icon()
-                        .cloned()
-                        .expect("default window icon missing"),
-                )
+                .icon(tauri::include_image!("icons/tray.png"))
                 .tooltip("Clipdeck")
                 .menu(&clip_menu::build_initial_tray_menu(app.handle())?)
                 .build(app)?;

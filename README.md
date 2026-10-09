@@ -1,3 +1,5 @@
+<img src="crates/clipdeck-app/icons/clipdeck.svg" alt="Clipdeck logo" width="96">
+
 # Clipdeck
 
 A lightweight, cross-platform clipboard manager.
