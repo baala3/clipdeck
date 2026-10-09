@@ -5,59 +5,88 @@
 <title>Clipdeck</title>
 <style>
   body { margin: 0; font-family: sans-serif; background: #1e1e1e; color: #eee; }
-  ul#list { list-style: none; margin: 0; padding: 0; max-height: 100vh; overflow-y: auto; }
+  input#search { box-sizing: border-box; width: 100%; padding: 8px 12px; border: none; border-bottom: 1px solid #333; background: #141414; color: #eee; font-size: 14px; outline: none; }
+  ul#list { list-style: none; margin: 0; padding: 0; max-height: calc(100vh - 37px); overflow-y: auto; }
   ul#list li { padding: 8px 12px; cursor: pointer; white-space: pre; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid #333; }
   ul#list li.selected { background: #2a7a7a; color: #fff; }
 </style>
 </head>
 <body>
+<input id="search" type="text" placeholder="Type to filter..." autocomplete="off" />
 <ul id="list"></ul>
 <script>
 const { invoke } = window.__TAURI__.core;
 const mode = new URLSearchParams(window.location.search).get('mode') === 'pinned' ? 'pinned' : 'history';
+const searchInput = document.getElementById('search');
 let items = [];
+let filteredIndices = [];
 let selected = 0;
+
+function recomputeFilter() {
+  const query = searchInput.value.trim().toLowerCase();
+  filteredIndices = query === ''
+    ? items.map((_, i) => i)
+    : items.reduce((acc, item, i) => {
+        if (item.text.toLowerCase().includes(query)) acc.push(i);
+        return acc;
+      }, []);
+  selected = Math.min(selected, Math.max(filteredIndices.length - 1, 0));
+}
 
 function render() {
   const list = document.getElementById('list');
   list.innerHTML = '';
-  items.forEach((item, i) => {
+  filteredIndices.forEach((itemIndex, pos) => {
     const li = document.createElement('li');
-    li.textContent = item.text;
-    if (i === selected) li.classList.add('selected');
-    li.onclick = () => choose(i);
+    li.textContent = items[itemIndex].text;
+    if (pos === selected) li.classList.add('selected');
+    li.onclick = () => choose(pos);
     list.appendChild(li);
   });
 }
 
 async function refresh() {
   items = await invoke(mode === 'pinned' ? 'get_pinned' : 'get_history');
-  selected = Math.min(selected, Math.max(items.length - 1, 0));
+  searchInput.value = '';
+  selected = 0;
+  recomputeFilter();
   render();
+  searchInput.focus();
 }
 
-function choose(i) {
-  invoke(mode === 'pinned' ? 'select_pinned' : 'select_clip', { index: i });
+function choose(pos) {
+  invoke(mode === 'pinned' ? 'select_pinned' : 'select_clip', { index: filteredIndices[pos] });
 }
 
-async function togglePin(i) {
-  if (items.length === 0) return;
-  await invoke(mode === 'pinned' ? 'unpin_clip' : 'pin_clip', { index: i });
+async function togglePin(pos) {
+  if (filteredIndices.length === 0) return;
+  await invoke(mode === 'pinned' ? 'unpin_clip' : 'pin_clip', { index: filteredIndices[pos] });
   await refresh();
 }
 
-document.addEventListener('keydown', (e) => {
+searchInput.addEventListener('input', () => {
+  selected = 0;
+  recomputeFilter();
+  render();
+});
+
+searchInput.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowDown') {
-    selected = Math.min(selected + 1, items.length - 1);
+    e.preventDefault();
+    selected = Math.min(selected + 1, filteredIndices.length - 1);
     render();
   } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
     selected = Math.max(selected - 1, 0);
     render();
   } else if (e.key === 'Enter' && e.shiftKey) {
+    e.preventDefault();
     togglePin(selected);
   } else if (e.key === 'Enter') {
+    e.preventDefault();
     choose(selected);
   } else if (e.key === 'Escape') {
+    e.preventDefault();
     invoke('close_popup');
   }
 });
