@@ -4,9 +4,12 @@ mod clip_menu;
 mod pinned;
 mod settings;
 
-use clip_engine::{ClipEngine, ClipboardSource, Settings, SqliteClipStore, SqlitePinnedStore};
+use clip_engine::{
+    adopt_legacy_store, ClipEngine, ClipboardSource, Settings, SqliteClipStore, SqlitePinnedStore,
+};
 use clip_menu::{MenuKind, MenuTargets};
 use settings::{HotkeyAction, Hotkeys, SettingsState, SETTINGS_WINDOW};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::tray::TrayIconBuilder;
@@ -61,6 +64,28 @@ fn on_hotkey(app: &tauri::AppHandle, action: HotkeyAction) {
     }
 }
 
+/// Where the store `file_name` lives: the per-user local data dir, which is
+/// machine-local (unlike the roaming settings file) since History can hold
+/// large images. Older versions kept stores in the working directory, which
+/// for a double-clicked exe is its own folder; those are moved over once.
+fn store_path(app: &tauri::App, file_name: &str) -> PathBuf {
+    let data_dir = app
+        .path()
+        .app_local_data_dir()
+        .expect("no app data directory on this OS");
+    let legacy_dirs: Vec<PathBuf> = [
+        std::env::current_exe().ok().and_then(|exe| exe.parent().map(PathBuf::from)),
+        std::env::current_dir().ok(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    adopt_legacy_store(&data_dir, file_name, &legacy_dirs).unwrap_or_else(|err| {
+        eprintln!("{err}");
+        err.legacy
+    })
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -76,8 +101,8 @@ fn main() {
         ])
         .setup(|app| {
             let settings_state = SettingsState::load(settings::settings_file_path(app));
-            let store = SqliteClipStore::open("clipdeck-history.sqlite3");
-            let pinned_store = SqlitePinnedStore::open("clipdeck-pinned.sqlite3");
+            let store = SqliteClipStore::open(store_path(app, "clipdeck-history.sqlite3"));
+            let pinned_store = SqlitePinnedStore::open(store_path(app, "clipdeck-pinned.sqlite3"));
             let current = settings_state.current().clone();
             let engine = ClipEngine::new(store, pinned_store, current.engine_config());
             let hotkeys = Hotkeys::parse(&current)

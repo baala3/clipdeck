@@ -9,7 +9,9 @@ Download the `clipdeck-<version>-windows-x64-portable.zip` asset and unzip it an
 There is no installer: double-click `clipdeck-app.exe` inside the unzipped folder to run it.
 Keep `clipdeck-app.exe` and `WebView2Loader.dll` in the same folder, or it will not start.
 Settings are kept in `%APPDATA%\dev.clipdeck.app\settings.toml`, which you can also edit by hand.
-To uninstall, quit Clipdeck from its tray icon, then delete the folder and `%APPDATA%\dev.clipdeck.app`.
+History and Pinned items are kept in `%LOCALAPPDATA%\dev.clipdeck.app`.
+Earlier builds kept them next to `clipdeck-app.exe`; the first launch of a newer build moves them there automatically.
+To uninstall, quit Clipdeck from its tray icon, then delete the folder, `%APPDATA%\dev.clipdeck.app`, and `%LOCALAPPDATA%\dev.clipdeck.app`.
 
 Clipdeck is unsigned (see [ADR-0002](adr/0002-ship-unsigned.md)), so Windows may warn you on first run.
 
