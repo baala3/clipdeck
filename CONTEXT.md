@@ -22,6 +22,7 @@ _Avoid_: Template (for v1 purposes, this concept doesn't exist yet)
 
 **Popup**:
 The ephemeral, hotkey-triggered overlay used to browse and select from History or from the Pinned list. Closes immediately after a selection or on dismiss. Not the main app window.
+Selecting a Clip copies it to the clipboard and (on Windows; see ADR-0005) pastes it directly into whatever was focused before the popup opened.
 _Avoid_: Window, panel (reserve "window" for the Settings Window)
 
 **Settings Window**:

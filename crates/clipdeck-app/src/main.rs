@@ -32,6 +32,10 @@ struct AppState {
     settings: Mutex<SettingsState>,
     /// The hotkeys currently in effect, read by the global shortcut handler.
     hotkeys: Mutex<Hotkeys>,
+    /// Whatever window was focused right before a popup was shown (Windows
+    /// HWND as a raw value; 0 means none captured). Restored and pasted into
+    /// after a selection, so picking a Clip pastes it directly.
+    previous_foreground: Mutex<isize>,
 }
 
 fn as_text_dtos(clips: Vec<clip_engine::Clip>) -> Vec<ClipDto> {
@@ -68,13 +72,28 @@ fn get_pinned(state: State<AppState>) -> Vec<ClipDto> {
     text_pinned(&engine)
 }
 
-fn copy_and_hide(app: &tauri::AppHandle, window: &tauri::WebviewWindow, text: Option<String>) {
+fn copy_and_hide(
+    app: &tauri::AppHandle,
+    window: &tauri::WebviewWindow,
+    state: &AppState,
+    text: Option<String>,
+) {
     if let Some(text) = text {
         if let Err(err) = app.clipboard().write_text(text) {
             eprintln!("copy_and_hide: failed to write clipboard: {err}");
         }
     }
     let _ = window.hide();
+
+    #[cfg(windows)]
+    {
+        let handle = *state.previous_foreground.lock().unwrap();
+        clip_windows::focus_window_and_paste(handle);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = state;
+    }
 }
 
 #[tauri::command]
@@ -83,7 +102,7 @@ fn select_clip(app: tauri::AppHandle, window: tauri::WebviewWindow, state: State
         let engine = state.engine.lock().unwrap();
         text_history(&engine).get(index).map(|c| c.text.clone())
     };
-    copy_and_hide(&app, &window, text);
+    copy_and_hide(&app, &window, &state, text);
 }
 
 #[tauri::command]
@@ -92,7 +111,7 @@ fn select_pinned(app: tauri::AppHandle, window: tauri::WebviewWindow, state: Sta
         let engine = state.engine.lock().unwrap();
         text_pinned(&engine).get(index).map(|c| c.text.clone())
     };
-    copy_and_hide(&app, &window, text);
+    copy_and_hide(&app, &window, &state, text);
 }
 
 /// `index` is into the display order the History popup shows (most recent first),
@@ -148,6 +167,10 @@ fn toggle_window(app: &tauri::AppHandle, label: &str) {
                 .lock()
                 .unwrap()
                 .insert(label.to_string(), Instant::now());
+            #[cfg(windows)]
+            {
+                *state.previous_foreground.lock().unwrap() = clip_windows::foreground_window();
+            }
             let _ = window.show();
             let _ = window.set_focus();
         }
@@ -182,6 +205,7 @@ fn main() {
                 shown_at: Mutex::new(HashMap::new()),
                 settings: Mutex::new(settings_state),
                 hotkeys: Mutex::new(hotkeys),
+                previous_foreground: Mutex::new(0),
             });
 
             #[cfg(windows)]
