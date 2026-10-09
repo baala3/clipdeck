@@ -4,70 +4,232 @@
 <meta charset="utf-8" />
 <title>Clipdeck</title>
 <style>
-  body { margin: 0; font-family: sans-serif; background: #1e1e1e; color: #eee; }
-  input#search { box-sizing: border-box; width: 100%; padding: 8px 12px; border: none; border-bottom: 1px solid #333; background: #141414; color: #eee; font-size: 14px; outline: none; }
-  ul#list { list-style: none; margin: 0; padding: 0; max-height: calc(100vh - 37px); overflow-y: auto; }
-  ul#list li { padding: 8px 12px; cursor: pointer; white-space: pre; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid #333; }
+  body { margin: 0; font-family: sans-serif; background: #1e1e1e; color: #eee; display: flex; flex-direction: column; height: 100vh; }
+  #bar { display: flex; align-items: center; border-bottom: 1px solid #333; background: #141414; }
+  input#search { flex: 1; min-width: 0; box-sizing: border-box; padding: 8px 12px; border: none; background: transparent; color: #eee; font-size: 14px; outline: none; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  #new { display: none; align-items: center; gap: 4px; margin: 0 6px; padding: 4px 8px; border: 1px solid #3a3a3a; border-radius: 4px; background: #262626; font-size: 12px; }
+  #new:hover { background: #2f2f2f; }
+  body.pinned-mode #new { display: inline-flex; }
+
+  ul#list { flex: 1; list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+  ul#list li { display: flex; align-items: center; gap: 8px; padding: 0 4px 0 12px; cursor: pointer; border-bottom: 1px solid #333; }
+  ul#list li .text { flex: 1; min-width: 0; padding: 8px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  ul#list li .text .newline { color: #777; }
   ul#list li.selected { background: #2a7a7a; color: #fff; }
+  ul#list li.empty { color: #888; cursor: default; padding: 12px; }
+
+  .pin { flex: none; display: flex; padding: 4px; border: none; border-radius: 4px; background: none; color: #888; visibility: hidden; }
+  .pin:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+  li:hover .pin, li.selected .pin, .pin.on { visibility: visible; }
+  .pin.on { color: #5fd0c8; }
+  li.selected .pin.on { color: #fff; }
+
+  #composer { display: none; flex-direction: column; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #333; background: #191919; }
+  body.composing #composer { display: flex; }
+  #composer textarea { box-sizing: border-box; width: 100%; min-height: 96px; resize: vertical; padding: 8px; border: 1px solid #3a3a3a; border-radius: 4px; background: #141414; color: #eee; font: 13px/1.4 ui-monospace, "Cascadia Mono", Menlo, monospace; outline: none; }
+  #composer textarea:focus { border-color: #2a7a7a; }
+  #composer .actions { display: flex; align-items: center; gap: 8px; }
+  #composer .hint { flex: 1; color: #888; font-size: 12px; }
+  #composer .actions button { padding: 4px 12px; font-size: 13px; border: 1px solid #3a3a3a; border-radius: 4px; background: #262626; }
+  #composer .actions button.primary { border-color: #2a7a7a; background: #2a7a7a; color: #fff; }
+  #composer .actions button:disabled { opacity: 0.5; cursor: default; }
 </style>
 </head>
 <body>
-<input id="search" type="text" placeholder="Type to filter..." autocomplete="off" />
+<div id="bar">
+  <input id="search" type="text" placeholder="Type to filter..." autocomplete="off" />
+  <button id="new" type="button" title="Write a new pinned item">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    New
+  </button>
+</div>
+<form id="composer">
+  <textarea id="composer-text" placeholder="Text to keep in Pinned..." aria-label="New pinned text"></textarea>
+  <div class="actions">
+    <span class="hint">Ctrl+Enter to pin · Esc to cancel</span>
+    <button type="button" id="composer-cancel">Cancel</button>
+    <button type="submit" class="primary" id="composer-save" disabled>Pin</button>
+  </div>
+</form>
 <ul id="list"></ul>
 <script>
 const { invoke } = window.__TAURI__.core;
 const mode = new URLSearchParams(window.location.search).get('mode') === 'pinned' ? 'pinned' : 'history';
+document.body.classList.toggle('pinned-mode', mode === 'pinned');
+
 const searchInput = document.getElementById('search');
+const list = document.getElementById('list');
+const composer = document.getElementById('composer');
+const composerText = document.getElementById('composer-text');
+const composerSave = document.getElementById('composer-save');
+
+// Each item is { id, text, pinned }; `id` is what the backend commands take.
 let items = [];
-let filteredIndices = [];
+let filtered = [];
 let selected = 0;
+
+const PIN_ICON_PATH = 'M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z';
+
+function pinIcon(filled) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('width', '16');
+  svg.setAttribute('height', '16');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', filled ? 'currentColor' : 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(ns, 'path');
+  path.setAttribute('d', PIN_ICON_PATH);
+  svg.appendChild(path);
+  return svg;
+}
+
+// Rows are one line; line breaks show as a dim ↵ so multi-line Clips stay compact.
+function rowText(text) {
+  const span = document.createElement('span');
+  span.className = 'text';
+  span.title = text;
+  text.split(/\r?\n/).forEach((line, i) => {
+    if (i > 0) {
+      const mark = document.createElement('span');
+      mark.className = 'newline';
+      mark.textContent = ' ↵ ';
+      span.appendChild(mark);
+    }
+    span.appendChild(document.createTextNode(line));
+  });
+  return span;
+}
 
 function recomputeFilter() {
   const query = searchInput.value.trim().toLowerCase();
-  filteredIndices = query === ''
-    ? items.map((_, i) => i)
-    : items.reduce((acc, item, i) => {
-        if (item.text.toLowerCase().includes(query)) acc.push(i);
-        return acc;
-      }, []);
-  selected = Math.min(selected, Math.max(filteredIndices.length - 1, 0));
+  filtered = query === '' ? items : items.filter((item) => item.text.toLowerCase().includes(query));
+  selected = Math.min(selected, Math.max(filtered.length - 1, 0));
 }
 
 function render() {
-  const list = document.getElementById('list');
-  list.innerHTML = '';
-  filteredIndices.forEach((itemIndex, pos) => {
+  list.replaceChildren();
+  if (filtered.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'empty';
+    empty.textContent = searchInput.value.trim()
+      ? 'No matches.'
+      : mode === 'pinned' ? 'Nothing pinned yet. Pin a Clip from History, or click New.' : 'Nothing copied yet.';
+    list.appendChild(empty);
+    return;
+  }
+  filtered.forEach((item, pos) => {
     const li = document.createElement('li');
-    li.textContent = items[itemIndex].text;
     if (pos === selected) li.classList.add('selected');
     li.onclick = () => choose(pos);
+
+    const pin = document.createElement('button');
+    pin.type = 'button';
+    pin.className = item.pinned ? 'pin on' : 'pin';
+    const label = mode === 'pinned' ? 'Unpin' : item.pinned ? 'Already pinned' : 'Pin';
+    pin.title = label;
+    pin.setAttribute('aria-label', label);
+    pin.appendChild(pinIcon(item.pinned));
+    // Keep keyboard focus in the search box, and don't treat this as selecting the row.
+    pin.onmousedown = (e) => e.preventDefault();
+    pin.onclick = (e) => {
+      e.stopPropagation();
+      togglePin(pos);
+    };
+
+    li.append(rowText(item.text), pin);
     list.appendChild(li);
   });
+  list.children[selected]?.scrollIntoView({ block: 'nearest' });
 }
 
-async function refresh() {
+async function load() {
   items = await invoke(mode === 'pinned' ? 'get_pinned' : 'get_history');
-  searchInput.value = '';
-  selected = 0;
   recomputeFilter();
   render();
+}
+
+// Fresh state each time the popup opens.
+async function refresh() {
+  closeComposer();
+  searchInput.value = '';
+  selected = 0;
+  await load();
   searchInput.focus();
 }
 
 function choose(pos) {
-  invoke(mode === 'pinned' ? 'select_pinned' : 'select_clip', { index: filteredIndices[pos] })
+  const item = filtered[pos];
+  if (!item) return;
+  invoke(mode === 'pinned' ? 'select_pinned' : 'select_clip', { id: item.id })
     .catch((err) => console.error('select failed:', err));
 }
 
 async function togglePin(pos) {
-  if (filteredIndices.length === 0) return;
+  const item = filtered[pos];
+  if (!item) return;
+  if (mode === 'history' && item.pinned) return;
   try {
-    await invoke(mode === 'pinned' ? 'unpin_clip' : 'pin_clip', { index: filteredIndices[pos] });
-    await refresh();
+    await invoke(mode === 'pinned' ? 'unpin_clip' : 'pin_clip', { id: item.id });
+    await load();
   } catch (err) {
     console.error('pin/unpin failed:', err);
   }
 }
+
+function openComposer() {
+  document.body.classList.add('composing');
+  composerText.focus();
+}
+
+function closeComposer() {
+  document.body.classList.remove('composing');
+  composerText.value = '';
+  composerSave.disabled = true;
+}
+
+async function saveComposer() {
+  const text = composerText.value;
+  if (!text.trim()) return;
+  try {
+    await invoke('pin_text', { text });
+    closeComposer();
+    searchInput.value = '';
+    selected = 0;
+    await load();
+    searchInput.focus();
+  } catch (err) {
+    console.error('pin_text failed:', err);
+  }
+}
+
+document.getElementById('new').addEventListener('click', openComposer);
+document.getElementById('composer-cancel').addEventListener('click', () => {
+  closeComposer();
+  searchInput.focus();
+});
+composer.addEventListener('submit', (e) => {
+  e.preventDefault();
+  saveComposer();
+});
+composerText.addEventListener('input', () => {
+  composerSave.disabled = !composerText.value.trim();
+});
+composerText.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    saveComposer();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    closeComposer();
+    searchInput.focus();
+  }
+});
 
 searchInput.addEventListener('input', () => {
   selected = 0;
@@ -78,7 +240,7 @@ searchInput.addEventListener('input', () => {
 searchInput.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowDown') {
     e.preventDefault();
-    selected = Math.min(selected + 1, filteredIndices.length - 1);
+    selected = Math.min(selected + 1, filtered.length - 1);
     render();
   } else if (e.key === 'ArrowUp') {
     e.preventDefault();

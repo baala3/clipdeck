@@ -20,13 +20,18 @@ use tauri_plugin_global_shortcut::ShortcutState;
 /// window of a deliberate show.
 const SHOW_GRACE_PERIOD: Duration = Duration::from_millis(400);
 
+/// One row in a popup. `id` is the Clip's chronological index in the engine
+/// (0 = oldest), which is what every engine call takes, so the frontend never
+/// has to convert display positions back into engine indices.
 #[derive(Serialize, Clone)]
 struct ClipDto {
+    id: usize,
     text: String,
+    pinned: bool,
 }
 
 struct AppState {
-    engine: Mutex<ClipEngine<SqliteClipStore, SqlitePinnedStore>>,
+    engine: Mutex<Engine>,
     paused: AtomicBool,
     shown_at: Mutex<HashMap<String, Instant>>,
     settings: Mutex<SettingsState>,
@@ -38,38 +43,43 @@ struct AppState {
     previous_foreground: Mutex<isize>,
 }
 
-fn as_text_dtos(clips: Vec<clip_engine::Clip>) -> Vec<ClipDto> {
-    clips
+type Engine = ClipEngine<SqliteClipStore, SqlitePinnedStore>;
+
+/// Text Clips, newest first, as popup rows. Images aren't shown in the popups yet.
+fn text_rows(clips: Vec<clip_engine::Clip>, is_pinned: impl Fn(&ClipContent) -> bool) -> Vec<ClipDto> {
+    let mut rows: Vec<ClipDto> = clips
         .into_iter()
-        .filter_map(|clip| match clip.content {
-            ClipContent::Text(text) => Some(ClipDto { text }),
-            ClipContent::Image(_) => None,
+        .enumerate()
+        .filter_map(|(id, clip)| {
+            let pinned = is_pinned(&clip.content);
+            match clip.content {
+                ClipContent::Text(text) => Some(ClipDto { id, text, pinned }),
+                ClipContent::Image(_) => None,
+            }
         })
-        .collect()
+        .collect();
+    rows.reverse();
+    rows
 }
 
-fn text_history(engine: &ClipEngine<SqliteClipStore, SqlitePinnedStore>) -> Vec<ClipDto> {
-    let mut history = engine.history();
-    history.reverse();
-    as_text_dtos(history)
-}
-
-fn text_pinned(engine: &ClipEngine<SqliteClipStore, SqlitePinnedStore>) -> Vec<ClipDto> {
-    let mut pinned = engine.pinned();
-    pinned.reverse();
-    as_text_dtos(pinned)
+fn clip_text(clips: Vec<clip_engine::Clip>, id: usize) -> Option<String> {
+    match clips.into_iter().nth(id)?.content {
+        ClipContent::Text(text) => Some(text),
+        ClipContent::Image(_) => None,
+    }
 }
 
 #[tauri::command]
 fn get_history(state: State<AppState>) -> Vec<ClipDto> {
     let engine = state.engine.lock().unwrap();
-    text_history(&engine)
+    let pinned: Vec<ClipContent> = engine.pinned().into_iter().map(|clip| clip.content).collect();
+    text_rows(engine.history(), |content| pinned.contains(content))
 }
 
 #[tauri::command]
 fn get_pinned(state: State<AppState>) -> Vec<ClipDto> {
     let engine = state.engine.lock().unwrap();
-    text_pinned(&engine)
+    text_rows(engine.pinned(), |_| true)
 }
 
 fn copy_and_hide(
@@ -96,44 +106,43 @@ fn copy_and_hide(
     }
 }
 
+/// Selecting a History Clip also moves it to the top, so it's first next time.
 #[tauri::command]
-fn select_clip(app: tauri::AppHandle, window: tauri::WebviewWindow, state: State<AppState>, index: usize) {
+fn select_clip(app: tauri::AppHandle, window: tauri::WebviewWindow, state: State<AppState>, id: usize) {
     let text = {
-        let engine = state.engine.lock().unwrap();
-        text_history(&engine).get(index).map(|c| c.text.clone())
+        let mut engine = state.engine.lock().unwrap();
+        let text = clip_text(engine.history(), id);
+        if text.is_some() {
+            engine.promote(id);
+        }
+        text
     };
     copy_and_hide(&app, &window, &state, text);
 }
 
 #[tauri::command]
-fn select_pinned(app: tauri::AppHandle, window: tauri::WebviewWindow, state: State<AppState>, index: usize) {
+fn select_pinned(app: tauri::AppHandle, window: tauri::WebviewWindow, state: State<AppState>, id: usize) {
     let text = {
         let engine = state.engine.lock().unwrap();
-        text_pinned(&engine).get(index).map(|c| c.text.clone())
+        clip_text(engine.pinned(), id)
     };
     copy_and_hide(&app, &window, &state, text);
 }
 
-/// `index` is into the display order the History popup shows (most recent first),
-/// so it must be converted to the chronological-order index the engine expects.
 #[tauri::command]
-fn pin_clip(state: State<AppState>, index: usize) -> bool {
-    let mut engine = state.engine.lock().unwrap();
-    let history_len = engine.history().len();
-    if index >= history_len {
-        return false;
-    }
-    engine.pin(history_len - 1 - index)
+fn pin_clip(state: State<AppState>, id: usize) -> bool {
+    state.engine.lock().unwrap().pin(id)
 }
 
 #[tauri::command]
-fn unpin_clip(state: State<AppState>, index: usize) -> bool {
-    let mut engine = state.engine.lock().unwrap();
-    let pinned_len = engine.pinned().len();
-    if index >= pinned_len {
-        return false;
-    }
-    engine.unpin(pinned_len - 1 - index)
+fn unpin_clip(state: State<AppState>, id: usize) -> bool {
+    state.engine.lock().unwrap().unpin(id)
+}
+
+/// Pins text the user wrote in the Pinned popup, rather than copied.
+#[tauri::command]
+fn pin_text(state: State<AppState>, text: String) -> bool {
+    state.engine.lock().unwrap().pin_text(text)
 }
 
 #[tauri::command]
@@ -187,6 +196,7 @@ fn main() {
             select_pinned,
             pin_clip,
             unpin_clip,
+            pin_text,
             close_popup,
             settings::get_settings,
             settings::update_settings,

@@ -10,14 +10,18 @@ _Avoid_: Entry, item, clipboard entry
 
 **History**:
 The rolling, chronological list of captured Clips, bounded by a capacity the user configures (up to an app-enforced maximum). Oldest Clips are evicted first once capacity is reached.
+Selecting a Clip, or copying content already in History, moves that Clip to the top instead of adding a duplicate.
 _Avoid_: Clipboard log, cache
 
 **Pin / Pinned list**:
 A separate, user-curated, flat list of Clips the user has explicitly chosen to keep. Pinning *copies* a Clip into this list - the original stays in History and is still evicted on its normal schedule. The Pinned list itself has no capacity cap.
+The user can also write text straight into the Pinned list without copying it first; such an item is a pinned Clip with no source app, and never passes through History.
+The same content is never pinned twice.
 _Avoid_: Favorite, bookmark
 
 **Snippet**:
-A reusable piece of text the user authors directly, not derived from a copy event. Explicitly out of scope for v1 - deferred as a separate future feature so it isn't conflated with Clips.
+A reusable piece of text the user authors directly, not derived from a copy event, with its own features (templates, placeholders, organization).
+Still out of scope as a separate concept. Plain user-written text lives in the Pinned list instead (see Pin), which covers the simple case without a second list.
 _Avoid_: Template (for v1 purposes, this concept doesn't exist yet)
 
 **Popup**:

@@ -16,6 +16,12 @@ impl ClipStore for InMemoryStore {
         }
     }
 
+    fn remove(&mut self, index: usize) {
+        if index < self.clips.len() {
+            self.clips.remove(index);
+        }
+    }
+
     fn len(&self) -> usize {
         self.clips.len()
     }
@@ -31,6 +37,10 @@ struct InMemoryPinnedStore {
 }
 
 impl PinnedStore for InMemoryPinnedStore {
+    fn contains(&self, content: &ClipContent) -> bool {
+        self.clips.iter().any(|clip| &clip.content == content)
+    }
+
     fn push(&mut self, clip: Clip) {
         self.clips.push(clip);
     }
@@ -109,4 +119,33 @@ fn pinned_list_has_no_capacity_cap() {
     }
 
     assert_eq!(engine.pinned().len(), 5000);
+}
+
+#[test]
+fn pinning_content_that_is_already_pinned_does_not_add_a_second_copy() {
+    let mut engine = engine_with_history(vec![text_clip("hello"), text_clip("hello again")]);
+    engine.pin(0);
+
+    assert!(engine.pin(0));
+
+    assert_eq!(engine.pinned(), vec![text_clip("hello")]);
+    assert!(engine.is_pinned(&ClipContent::Text("hello".into())));
+    assert!(!engine.is_pinned(&ClipContent::Text("hello again".into())));
+}
+
+#[test]
+fn text_written_by_the_user_can_be_pinned_directly_without_touching_history() {
+    let mut engine = engine_with_history(vec![text_clip("copied")]);
+
+    assert!(engine.pin_text("my email signature\nBala".into()));
+    assert!(!engine.pin_text("   \n ".into()), "blank text is not pinned");
+
+    assert_eq!(
+        engine.pinned(),
+        vec![Clip {
+            content: ClipContent::Text("my email signature\nBala".into()),
+            source_app: None,
+        }]
+    );
+    assert_eq!(engine.history(), vec![text_clip("copied")]);
 }

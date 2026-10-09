@@ -63,6 +63,8 @@ pub trait ClipboardSource {
 pub trait ClipStore {
     fn push(&mut self, clip: Clip);
     fn evict_oldest(&mut self);
+    /// Removes the Clip at `index` in chronological order (0 = oldest).
+    fn remove(&mut self, index: usize);
     fn len(&self) -> usize;
     fn all(&self) -> Vec<Clip>;
 
@@ -75,6 +77,10 @@ pub trait PinnedStore {
     fn push(&mut self, clip: Clip);
     fn remove(&mut self, index: usize);
     fn all(&self) -> Vec<Clip>;
+
+    fn contains(&self, content: &ClipContent) -> bool {
+        self.all().iter().any(|clip| &clip.content == content)
+    }
 }
 
 pub struct ClipEngine<S: ClipStore, P: PinnedStore> {
@@ -92,14 +98,39 @@ impl<S: ClipStore, P: PinnedStore> ClipEngine<S, P> {
         }
     }
 
+    /// Copies a History Clip into the Pinned list. Pinning content that's
+    /// already pinned is a no-op that still reports success.
     pub fn pin(&mut self, history_index: usize) -> bool {
         match self.store.all().into_iter().nth(history_index) {
             Some(clip) => {
-                self.pinned_store.push(clip);
+                if !self.is_pinned(&clip.content) {
+                    self.pinned_store.push(clip);
+                }
                 true
             }
             None => false,
         }
+    }
+
+    /// Pins text the user wrote themselves rather than copied, so it never
+    /// passes through History. Blank text is rejected; already-pinned text is
+    /// a no-op that still reports success.
+    pub fn pin_text(&mut self, text: String) -> bool {
+        if text.trim().is_empty() {
+            return false;
+        }
+        let content = ClipContent::Text(text);
+        if !self.is_pinned(&content) {
+            self.pinned_store.push(Clip {
+                content,
+                source_app: None,
+            });
+        }
+        true
+    }
+
+    pub fn is_pinned(&self, content: &ClipContent) -> bool {
+        self.pinned_store.contains(content)
     }
 
     pub fn unpin(&mut self, pinned_index: usize) -> bool {
@@ -130,6 +161,17 @@ impl<S: ClipStore, P: PinnedStore> ClipEngine<S, P> {
                 return CaptureOutcome::Dropped;
             }
         }
+        // Copying something already in History (including Clipdeck's own
+        // clipboard write after a selection) moves it to the top rather than
+        // adding a duplicate.
+        if let Some(existing) = self
+            .store
+            .all()
+            .iter()
+            .position(|clip| clip.content == incoming.content)
+        {
+            self.store.remove(existing);
+        }
         self.store.push(Clip {
             content: incoming.content,
             source_app: incoming.source_app,
@@ -149,6 +191,20 @@ impl<S: ClipStore, P: PinnedStore> ClipEngine<S, P> {
     fn evict_down_to_capacity(&mut self) {
         while self.store.len() > self.history_capacity() {
             self.store.evict_oldest();
+        }
+    }
+
+    /// Moves a History Clip to the newest position, e.g. after the user selects
+    /// it, so it's at the top next time. `history_index` is chronological
+    /// (0 = oldest).
+    pub fn promote(&mut self, history_index: usize) -> bool {
+        match self.store.all().into_iter().nth(history_index) {
+            Some(clip) => {
+                self.store.remove(history_index);
+                self.store.push(clip);
+                true
+            }
+            None => false,
         }
     }
 
@@ -210,6 +266,24 @@ impl SqlitePinnedStore {
 }
 
 impl PinnedStore for SqlitePinnedStore {
+    fn contains(&self, content: &ClipContent) -> bool {
+        let query = |sql: &str, value: &dyn rusqlite::ToSql| -> bool {
+            self.conn
+                .query_row(sql, [value], |row| row.get(0))
+                .expect("failed to check pinned clips")
+        };
+        match content {
+            ClipContent::Text(text) => query(
+                "SELECT EXISTS(SELECT 1 FROM pinned_clips WHERE text = ?1)",
+                text,
+            ),
+            ClipContent::Image(bytes) => query(
+                "SELECT EXISTS(SELECT 1 FROM pinned_clips WHERE image = ?1)",
+                bytes,
+            ),
+        }
+    }
+
     fn push(&mut self, clip: Clip) {
         let (text, image) = match clip.content {
             ClipContent::Text(text) => (Some(text), None),
@@ -284,6 +358,15 @@ impl ClipStore for SqliteClipStore {
                 (),
             )
             .expect("failed to evict oldest clip");
+    }
+
+    fn remove(&mut self, index: usize) {
+        self.conn
+            .execute(
+                "DELETE FROM clips WHERE id = (SELECT id FROM clips ORDER BY id ASC LIMIT 1 OFFSET ?1)",
+                (index as i64,),
+            )
+            .expect("failed to remove clip");
     }
 
     fn len(&self) -> usize {

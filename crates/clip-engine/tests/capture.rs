@@ -30,6 +30,12 @@ impl ClipStore for InMemoryStore {
         }
     }
 
+    fn remove(&mut self, index: usize) {
+        if index < self.clips.len() {
+            self.clips.remove(index);
+        }
+    }
+
     fn len(&self) -> usize {
         self.clips.len()
     }
@@ -45,6 +51,10 @@ struct InMemoryPinnedStore {
 }
 
 impl PinnedStore for InMemoryPinnedStore {
+    fn contains(&self, content: &ClipContent) -> bool {
+        self.clips.iter().any(|clip| &clip.content == content)
+    }
+
     fn push(&mut self, clip: Clip) {
         self.clips.push(clip);
     }
@@ -257,4 +267,49 @@ fn an_engine_reconfigured_from_settings_applies_their_capacity_and_exclusions() 
 
     assert_eq!(engine.history_capacity(), 1);
     assert_eq!(engine.capture(text_clip("from TextEdit")), CaptureOutcome::Dropped);
+}
+
+fn history_texts(engine: &ClipEngine<InMemoryStore, InMemoryPinnedStore>) -> Vec<String> {
+    engine
+        .history()
+        .into_iter()
+        .map(|clip| match clip.content {
+            ClipContent::Text(text) => text,
+            ClipContent::Image(_) => "<image>".into(),
+        })
+        .collect()
+}
+
+#[test]
+fn promoting_a_clip_moves_it_to_the_newest_position_without_duplicating_it() {
+    let mut engine = ClipEngine::new(
+        InMemoryStore::default(),
+        InMemoryPinnedStore::default(),
+        EngineConfig::default(),
+    );
+    for text in ["one", "two", "three"] {
+        engine.capture(text_clip(text));
+    }
+
+    assert!(engine.promote(0));
+
+    assert_eq!(history_texts(&engine), vec!["two", "three", "one"]);
+    assert!(!engine.promote(3), "out of range does nothing");
+    assert_eq!(history_texts(&engine), vec!["two", "three", "one"]);
+}
+
+#[test]
+fn capturing_content_already_in_history_moves_it_to_the_top_instead_of_duplicating_it() {
+    let mut engine = ClipEngine::new(
+        InMemoryStore::default(),
+        InMemoryPinnedStore::default(),
+        EngineConfig::default(),
+    );
+    for text in ["one", "two", "three"] {
+        engine.capture(text_clip(text));
+    }
+
+    assert_eq!(engine.capture(text_clip("one")), CaptureOutcome::Captured);
+
+    assert_eq!(history_texts(&engine), vec!["two", "three", "one"]);
 }
