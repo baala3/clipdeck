@@ -51,6 +51,7 @@ pub struct MenuTargets {
 
 const CLEAR_HISTORY: &str = "clear_history";
 const EDIT_PINNED: &str = "edit_pinned";
+const NEW_PINNED: &str = "new_pinned";
 const SETTINGS: &str = "settings";
 const PAUSE: &str = "pause";
 const QUIT: &str = "quit";
@@ -145,6 +146,7 @@ fn build(app: &AppHandle, kind: MenuKind, snap: &Snapshot, id_prefix: &str) -> t
         }
         // Like Clipy, number shortcuts belong to History unless Pinned is shown alone.
         section("Pinned", List::Pinned, &snap.pinned, kind == MenuKind::Pinned)?;
+        menu.append(&MenuItem::with_id(app, NEW_PINNED, "New Item...", true, None::<&str>)?)?;
     }
     if matches!(kind, MenuKind::Main | MenuKind::Tray) {
         menu.append(&PredefinedMenuItem::separator(app)?)?;
@@ -270,6 +272,8 @@ pub fn handle_menu_event(app: &AppHandle, id: &str) {
     match id {
         CLEAR_HISTORY => confirm_and_clear_history(app),
         EDIT_PINNED => settings::show_settings_window_at(app, Some("pinned")),
+        // A menu can't hold a text box, so writing happens in Settings.
+        NEW_PINNED => settings::show_settings_window_at(app, Some("pinned-new")),
         SETTINGS => settings::show_settings_window_at(app, None),
         PAUSE => {
             let state = app.state::<AppState>();

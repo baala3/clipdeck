@@ -14,6 +14,7 @@ This deliberately reverses earlier decisions:
   Settings opens from the menu's "Settings..." item.
 - **Pinning and writing pinned text moved.**
   A modifier+click on a History item pins it, and pinned items are written, edited, and removed in a Pinned section of the Settings Window, the counterpart of Clipy's "Edit Snippets" window.
+  The Pinned part of every menu ends with a "New Item..." entry that opens that section with an empty editor, since a native menu can't hold a text box.
   Deleting with a modifier+click mirrors one of Clipy's beta options.
 
 Two platform gaps shaped the implementation:

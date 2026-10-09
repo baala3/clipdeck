@@ -45,7 +45,7 @@
   }
   h1 { font-size: 20px; font-weight: 600; margin: 0 0 16px; }
   h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
-  section { margin-bottom: 20px; }
+  section { margin-bottom: 20px; scroll-margin-top: 16px; }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
   .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 14px; }
   .row + .row { border-top: 1px solid var(--border); }
@@ -601,7 +601,12 @@ listen('pinned-changed', () => {
 });
 
 listen('show-section', (event) => {
-  document.getElementById(`${event.payload}-section`)?.scrollIntoView({ block: 'start' });
+  const section = event.payload === 'pinned-new' ? 'pinned' : event.payload;
+  if (event.payload === 'pinned-new') {
+    editing = 'new';
+    renderPinned();
+  }
+  document.getElementById(`${section}-section`)?.scrollIntoView({ block: 'start' });
 });
 
 listen('settings-changed', (event) => {
