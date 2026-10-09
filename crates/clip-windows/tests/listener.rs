@@ -108,3 +108,35 @@ fn a_clipboard_change_reports_the_exe_name_of_the_app_that_made_it() {
         "got {app:?}"
     );
 }
+
+#[test]
+fn apps_copying_through_the_ole_clipboard_are_not_locked_out_while_listening() {
+    let _clipboard = CLIPBOARD.lock().unwrap_or_else(|e| e.into_inner());
+    let mut source = WindowsClipboardSource::new();
+    std::thread::sleep(Duration::from_millis(200));
+
+    // PowerShell's Set-Clipboard copies through the OLE clipboard, like .NET
+    // and WPF apps do, and reports an error when it can't finish the copy.
+    let failures = std::process::Command::new("powershell.exe")
+        .args([
+            "-NoProfile",
+            "-STA",
+            "-Command",
+            "$failed = 0; 1..5 | % { try { Set-Clipboard \"ole copy $_\" -ErrorAction Stop } \
+             catch { $failed++ }; Start-Sleep -Milliseconds 300 }; exit $failed",
+        ])
+        .status()
+        .expect("couldn't run powershell.exe")
+        .code();
+
+    assert_eq!(failures, Some(0), "copies that failed out of 5");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut last = None;
+    while Instant::now() < deadline && last != Some(ClipContent::Text("ole copy 5".into())) {
+        if let Some(event) = source.next_event() {
+            last = Some(event.content);
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(last, Some(ClipContent::Text("ole copy 5".into())));
+}
