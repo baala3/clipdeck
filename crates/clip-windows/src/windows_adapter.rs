@@ -16,9 +16,8 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetForegroundWindow, GetMessageW,
-    GetWindowLongPtrW, GetWindowThreadProcessId,
-    RegisterClassW, SetWindowLongPtrW, TranslateMessage, GWLP_USERDATA, HWND_MESSAGE, MSG,
-    WM_CLIPBOARDUPDATE, WNDCLASSW,
+    GetWindowLongPtrW, GetWindowThreadProcessId, RegisterClassW, SetWindowLongPtrW,
+    TranslateMessage, GWLP_USERDATA, HWND_MESSAGE, MSG, WM_CLIPBOARDUPDATE, WNDCLASSW,
 };
 
 type Queue = Mutex<VecDeque<IncomingClip>>;
@@ -171,7 +170,12 @@ unsafe fn source_app_name() -> Option<String> {
     let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
     let mut buf = [0u16; 1024];
     let mut len = buf.len() as u32;
-    let queried = QueryFullProcessImageNameW(process, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut len);
+    let queried = QueryFullProcessImageNameW(
+        process,
+        PROCESS_NAME_WIN32,
+        PWSTR(buf.as_mut_ptr()),
+        &mut len,
+    );
     let _ = CloseHandle(process);
     queried.ok()?;
     let path = String::from_utf16_lossy(&buf[..len as usize]);

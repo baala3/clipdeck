@@ -94,46 +94,74 @@ struct BuiltMenu {
     digits: HashMap<char, Target>,
 }
 
-fn build(app: &AppHandle, kind: MenuKind, snap: &Snapshot, id_prefix: &str) -> tauri::Result<BuiltMenu> {
+fn build(
+    app: &AppHandle,
+    kind: MenuKind,
+    snap: &Snapshot,
+    id_prefix: &str,
+) -> tauri::Result<BuiltMenu> {
     let menu = Menu::new(app)?;
     let mut built_targets = HashMap::new();
     let mut digits = HashMap::new();
-    let mut section = |title: &str, list: List, texts: &[String], with_digits: bool| -> tauri::Result<()> {
-        menu.append(&MenuItem::with_id(app, format!("{id_prefix}label:{title}"), title, false, None::<&str>)?)?;
-        if texts.is_empty() {
-            menu.append(&MenuItem::with_id(app, format!("{id_prefix}empty:{title}"), "(empty)", false, None::<&str>)?)?;
-            return Ok(());
-        }
-        let number_modifier = if with_digits {
-            snap.settings.number_shortcut_modifier
-        } else {
-            ShortcutModifier::Off
-        };
-        let mut item = |model: &MenuItemModel| -> tauri::Result<MenuItem<Wry>> {
-            let id = format!("{id_prefix}{}:{}", list_code(list), model.position);
-            let target = Target {
-                list,
-                text: texts[model.position].clone(),
-            };
-            let accelerator = model.shortcut_digit.and_then(|digit| accelerator(number_modifier, digit));
-            if accelerator.is_some() {
-                digits.insert(model.shortcut_digit.unwrap(), target.clone());
+    let mut section =
+        |title: &str, list: List, texts: &[String], with_digits: bool| -> tauri::Result<()> {
+            menu.append(&MenuItem::with_id(
+                app,
+                format!("{id_prefix}label:{title}"),
+                title,
+                false,
+                None::<&str>,
+            )?)?;
+            if texts.is_empty() {
+                menu.append(&MenuItem::with_id(
+                    app,
+                    format!("{id_prefix}empty:{title}"),
+                    "(empty)",
+                    false,
+                    None::<&str>,
+                )?)?;
+                return Ok(());
             }
-            built_targets.insert(id.clone(), target);
-            MenuItem::with_id(app, id, escape_mnemonics(&model.label), true, accelerator.as_deref())
-        };
-        for entry in layout(texts, &snap.settings.menu_layout()) {
-            match entry {
-                MenuEntry::Item(model) => menu.append(&item(&model)?)?,
-                MenuEntry::Folder { title, items } => {
-                    let built: Vec<MenuItem<Wry>> = items.iter().map(&mut item).collect::<tauri::Result<_>>()?;
-                    let refs: Vec<&dyn IsMenuItem<Wry>> = built.iter().map(|i| i as &dyn IsMenuItem<Wry>).collect();
-                    menu.append(&Submenu::with_items(app, title, true, &refs)?)?;
+            let number_modifier = if with_digits {
+                snap.settings.number_shortcut_modifier
+            } else {
+                ShortcutModifier::Off
+            };
+            let mut item = |model: &MenuItemModel| -> tauri::Result<MenuItem<Wry>> {
+                let id = format!("{id_prefix}{}:{}", list_code(list), model.position);
+                let target = Target {
+                    list,
+                    text: texts[model.position].clone(),
+                };
+                let accelerator = model
+                    .shortcut_digit
+                    .and_then(|digit| accelerator(number_modifier, digit));
+                if accelerator.is_some() {
+                    digits.insert(model.shortcut_digit.unwrap(), target.clone());
+                }
+                built_targets.insert(id.clone(), target);
+                MenuItem::with_id(
+                    app,
+                    id,
+                    escape_mnemonics(&model.label),
+                    true,
+                    accelerator.as_deref(),
+                )
+            };
+            for entry in layout(texts, &snap.settings.menu_layout()) {
+                match entry {
+                    MenuEntry::Item(model) => menu.append(&item(&model)?)?,
+                    MenuEntry::Folder { title, items } => {
+                        let built: Vec<MenuItem<Wry>> =
+                            items.iter().map(&mut item).collect::<tauri::Result<_>>()?;
+                        let refs: Vec<&dyn IsMenuItem<Wry>> =
+                            built.iter().map(|i| i as &dyn IsMenuItem<Wry>).collect();
+                        menu.append(&Submenu::with_items(app, title, true, &refs)?)?;
+                    }
                 }
             }
-        }
-        Ok(())
-    };
+            Ok(())
+        };
 
     if kind != MenuKind::Pinned {
         section("History", List::History, &snap.history, true)?;
@@ -143,18 +171,60 @@ fn build(app: &AppHandle, kind: MenuKind, snap: &Snapshot, id_prefix: &str) -> t
             menu.append(&PredefinedMenuItem::separator(app)?)?;
         }
         // Like Clipy, number shortcuts belong to History unless Pinned is shown alone.
-        section("Pinned", List::Pinned, &snap.pinned, kind == MenuKind::Pinned)?;
-        menu.append(&MenuItem::with_id(app, NEW_PINNED, "New Item...", true, None::<&str>)?)?;
+        section(
+            "Pinned",
+            List::Pinned,
+            &snap.pinned,
+            kind == MenuKind::Pinned,
+        )?;
+        menu.append(&MenuItem::with_id(
+            app,
+            NEW_PINNED,
+            "New Item...",
+            true,
+            None::<&str>,
+        )?)?;
     }
     // Every menu ends with the app actions, so they're reachable from any
     // hotkey, not just the tray icon.
     menu.append(&PredefinedMenuItem::separator(app)?)?;
-    menu.append(&MenuItem::with_id(app, CLEAR_HISTORY, "Clear History", !snap.history.is_empty(), None::<&str>)?)?;
-    menu.append(&MenuItem::with_id(app, EDIT_PINNED, "Edit Pinned...", true, None::<&str>)?)?;
-    menu.append(&MenuItem::with_id(app, SETTINGS, "Settings...", true, None::<&str>)?)?;
-    menu.append(&CheckMenuItem::with_id(app, PAUSE, "Pause capture", true, snap.paused, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(
+        app,
+        CLEAR_HISTORY,
+        "Clear History",
+        !snap.history.is_empty(),
+        None::<&str>,
+    )?)?;
+    menu.append(&MenuItem::with_id(
+        app,
+        EDIT_PINNED,
+        "Edit Pinned...",
+        true,
+        None::<&str>,
+    )?)?;
+    menu.append(&MenuItem::with_id(
+        app,
+        SETTINGS,
+        "Settings...",
+        true,
+        None::<&str>,
+    )?)?;
+    menu.append(&CheckMenuItem::with_id(
+        app,
+        PAUSE,
+        "Pause capture",
+        true,
+        snap.paused,
+        None::<&str>,
+    )?)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
-    menu.append(&MenuItem::with_id(app, QUIT, "Quit Clipdeck", true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(
+        app,
+        QUIT,
+        "Quit Clipdeck",
+        true,
+        None::<&str>,
+    )?)?;
     Ok(BuiltMenu {
         menu,
         targets: built_targets,
@@ -305,7 +375,12 @@ fn activation_modifiers() -> HeldModifiers {
 /// A plain click pastes; with the delete or pin modifier held (Clipy's beta
 /// options), it deletes or pins instead.
 fn activate(app: &AppHandle, target: &Target, held: HeldModifiers, paste_into_previous: bool) {
-    let settings = app.state::<AppState>().active_settings.lock().unwrap().clone();
+    let settings = app
+        .state::<AppState>()
+        .active_settings
+        .lock()
+        .unwrap()
+        .clone();
     if settings.delete_modifier.is_held(held) {
         with_target_index(app, target, |engine, list, index| match list {
             List::History => engine.delete(index),
@@ -321,7 +396,11 @@ fn activate(app: &AppHandle, target: &Target, held: HeldModifiers, paste_into_pr
 }
 
 /// Finds the target's current chronological index in its list and runs `f` on it.
-fn with_target_index(app: &AppHandle, target: &Target, f: impl FnOnce(&mut crate::Engine, List, usize) -> bool) {
+fn with_target_index(
+    app: &AppHandle,
+    target: &Target,
+    f: impl FnOnce(&mut crate::Engine, List, usize) -> bool,
+) {
     let state = app.state::<AppState>();
     let mut engine = state.engine.lock().unwrap();
     let clips = match target.list {
@@ -365,10 +444,17 @@ pub fn confirm_and_clear_history(app: &AppHandle) {
             .message("Clear all History? Pinned items are kept.")
             .title("Clear History")
             .kind(MessageDialogKind::Warning)
-            .buttons(MessageDialogButtons::OkCancelCustom("Clear History".into(), "Cancel".into()))
+            .buttons(MessageDialogButtons::OkCancelCustom(
+                "Clear History".into(),
+                "Cancel".into(),
+            ))
             .blocking_show();
         if confirmed {
-            app.state::<AppState>().engine.lock().unwrap().clear_history();
+            app.state::<AppState>()
+                .engine
+                .lock()
+                .unwrap()
+                .clear_history();
             refresh_tray_menu(&app);
         }
     });

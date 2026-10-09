@@ -52,7 +52,10 @@ fn saving_from_the_settings_window_keeps_comments_a_developer_wrote_by_hand() {
 
     let written = std::fs::read_to_string(&path).unwrap();
     assert!(written.contains("# my dotfiles copy"), "{written}");
-    assert!(written.contains("history_capacity = 750 # plenty"), "{written}");
+    assert!(
+        written.contains("history_capacity = 750 # plenty"),
+        "{written}"
+    );
     assert_eq!(SettingsFile::new(&path).load().unwrap(), settings);
 }
 
@@ -104,7 +107,10 @@ fn reload_if_changed_reports_hand_edits_but_not_the_apps_own_saves() {
 
     std::fs::write(&path, "history_capacity = \"lots\"\n").unwrap();
     assert!(file.reload_if_changed().unwrap().is_err());
-    assert!(file.reload_if_changed().is_none(), "a broken file is reported once, not every poll");
+    assert!(
+        file.reload_if_changed().is_none(),
+        "a broken file is reported once, not every poll"
+    );
 }
 
 #[test]
@@ -160,7 +166,11 @@ fn the_delete_and_pin_click_modifiers_must_differ_unless_turned_off() {
 fn modifier_settings_are_written_as_readable_names() {
     let dir = tempfile::tempdir().unwrap();
     let path = settings_path(&dir);
-    std::fs::write(&path, "number_shortcut_modifier = \"Alt\"\ndelete_modifier = \"Off\"\n").unwrap();
+    std::fs::write(
+        &path,
+        "number_shortcut_modifier = \"Alt\"\ndelete_modifier = \"Off\"\n",
+    )
+    .unwrap();
 
     let settings = SettingsFile::new(&path).load().unwrap();
 

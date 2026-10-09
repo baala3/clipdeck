@@ -69,14 +69,16 @@ fn text_clip(text: &str) -> Clip {
     }
 }
 
-fn engine_with_history(
-    clips: Vec<Clip>,
-) -> ClipEngine<InMemoryStore, InMemoryPinnedStore> {
+fn engine_with_history(clips: Vec<Clip>) -> ClipEngine<InMemoryStore, InMemoryPinnedStore> {
     let mut store = InMemoryStore::default();
     for clip in clips {
         store.push(clip);
     }
-    ClipEngine::new(store, InMemoryPinnedStore::default(), EngineConfig::default())
+    ClipEngine::new(
+        store,
+        InMemoryPinnedStore::default(),
+        EngineConfig::default(),
+    )
 }
 
 #[test]
@@ -144,7 +146,10 @@ fn text_written_by_the_user_can_be_pinned_directly_without_touching_history() {
     let mut engine = engine_with_history(vec![text_clip("copied")]);
 
     assert!(engine.pin_text("my email signature\nBala".into()));
-    assert!(!engine.pin_text("   \n ".into()), "blank text is not pinned");
+    assert!(
+        !engine.pin_text("   \n ".into()),
+        "blank text is not pinned"
+    );
 
     assert_eq!(
         engine.pinned(),
@@ -163,8 +168,14 @@ fn a_pinned_item_can_be_edited_in_place() {
     engine.pin_text("second".into());
 
     assert!(engine.update_pinned(0, "first, edited".into()));
-    assert!(!engine.update_pinned(0, "  ".into()), "blank text is rejected");
-    assert!(!engine.update_pinned(9, "nope".into()), "out of range does nothing");
+    assert!(
+        !engine.update_pinned(0, "  ".into()),
+        "blank text is rejected"
+    );
+    assert!(
+        !engine.update_pinned(9, "nope".into()),
+        "out of range does nothing"
+    );
 
     let texts: Vec<ClipContent> = engine.pinned().into_iter().map(|c| c.content).collect();
     assert_eq!(

@@ -74,7 +74,9 @@ fn store_path(app: &tauri::App, file_name: &str) -> PathBuf {
         .app_local_data_dir()
         .expect("no app data directory on this OS");
     let legacy_dirs: Vec<PathBuf> = [
-        std::env::current_exe().ok().and_then(|exe| exe.parent().map(PathBuf::from)),
+        std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(PathBuf::from)),
         std::env::current_dir().ok(),
     ]
     .into_iter()
@@ -119,13 +121,20 @@ fn main() {
             });
 
             #[cfg(windows)]
-            spawn_capture_thread(app.handle().clone(), clip_windows::WindowsClipboardSource::new());
+            spawn_capture_thread(
+                app.handle().clone(),
+                clip_windows::WindowsClipboardSource::new(),
+            );
             #[cfg(target_os = "macos")]
             spawn_capture_thread(app.handle().clone(), clip_macos::MacClipboardSource::new());
 
             // Like Clipy, clicking the tray icon shows the full menu.
             TrayIconBuilder::with_id(clip_menu::TRAY_ID)
-                .icon(app.default_window_icon().cloned().expect("default window icon missing"))
+                .icon(
+                    app.default_window_icon()
+                        .cloned()
+                        .expect("default window icon missing"),
+                )
                 .tooltip("Clipdeck")
                 .menu(&clip_menu::build_initial_tray_menu(app.handle())?)
                 .build(app)?;
@@ -136,7 +145,12 @@ fn main() {
                         if event.state() != ShortcutState::Pressed {
                             return;
                         }
-                        let action = app.state::<AppState>().hotkeys.lock().unwrap().action_for(shortcut);
+                        let action = app
+                            .state::<AppState>()
+                            .hotkeys
+                            .lock()
+                            .unwrap()
+                            .action_for(shortcut);
                         if let Some(action) = action {
                             on_hotkey(app, action);
                         }

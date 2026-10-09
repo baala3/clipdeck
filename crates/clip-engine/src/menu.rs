@@ -40,7 +40,10 @@ pub fn menu_title(text: &str, max_length: usize) -> String {
     if first_line.chars().count() <= max_length {
         return first_line.to_string();
     }
-    let kept: String = first_line.chars().take(max_length - ELLIPSIS.len()).collect();
+    let kept: String = first_line
+        .chars()
+        .take(max_length - ELLIPSIS.len())
+        .collect();
     format!("{kept}{ELLIPSIS}")
 }
 
@@ -51,12 +54,17 @@ pub fn layout(texts: &[String], options: &MenuLayout) -> Vec<MenuEntry> {
     let per_folder = options.items_per_folder.max(1);
     let item = |position: usize, number: usize| MenuItemModel {
         position,
-        label: format!("{number}. {}", menu_title(&texts[position], options.title_length)),
+        label: format!(
+            "{number}. {}",
+            menu_title(&texts[position], options.title_length)
+        ),
         shortcut_digit: SHORTCUT_DIGITS.get(position).copied(),
     };
 
     let inline = options.items_inline.min(texts.len());
-    let mut entries: Vec<MenuEntry> = (0..inline).map(|p| MenuEntry::Item(item(p, p + 1))).collect();
+    let mut entries: Vec<MenuEntry> = (0..inline)
+        .map(|p| MenuEntry::Item(item(p, p + 1)))
+        .collect();
 
     let mut start = inline;
     while start < texts.len() {

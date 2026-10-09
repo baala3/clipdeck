@@ -30,10 +30,16 @@ pub async fn list_pinned(state: State<'_, AppState>) -> Result<Vec<PinnedItem>, 
 }
 
 #[tauri::command]
-pub async fn add_pinned(app: AppHandle, state: State<'_, AppState>, text: String) -> Result<(), String> {
+pub async fn add_pinned(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    text: String,
+) -> Result<(), String> {
     let added = state.engine.lock().unwrap().pin_text(text);
     clip_menu::refresh_tray_menu(&app);
-    added.then_some(()).ok_or_else(|| "A pinned item can't be blank.".into())
+    added
+        .then_some(())
+        .ok_or_else(|| "A pinned item can't be blank.".into())
 }
 
 #[tauri::command]
@@ -51,7 +57,11 @@ pub async fn edit_pinned(
 }
 
 #[tauri::command]
-pub async fn remove_pinned(app: AppHandle, state: State<'_, AppState>, index: usize) -> Result<(), String> {
+pub async fn remove_pinned(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    index: usize,
+) -> Result<(), String> {
     state.engine.lock().unwrap().unpin(index);
     clip_menu::refresh_tray_menu(&app);
     Ok(())
