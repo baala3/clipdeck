@@ -4,13 +4,20 @@ use clip_engine::{
     ClipContent, ClipEngine, ClipboardSource, EngineConfig, SqliteClipStore, SqlitePinnedStore,
 };
 use serde::Serialize;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{Manager, State, WindowEvent};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+
+/// Spurious blur events can fire right after `window.show()` + `window.set_focus()`
+/// (a known Tauri/WebView2 race), so hide-on-blur ignores any blur within this
+/// window of a deliberate show.
+const SHOW_GRACE_PERIOD: Duration = Duration::from_millis(400);
 
 #[derive(Serialize, Clone)]
 struct ClipDto {
@@ -20,6 +27,7 @@ struct ClipDto {
 struct AppState {
     engine: Mutex<ClipEngine<SqliteClipStore, SqlitePinnedStore>>,
     paused: AtomicBool,
+    shown_at: Mutex<HashMap<String, Instant>>,
 }
 
 fn as_text_dtos(clips: Vec<clip_engine::Clip>) -> Vec<ClipDto> {
@@ -130,6 +138,12 @@ fn toggle_window(app: &tauri::AppHandle, label: &str) {
         if currently_visible {
             let _ = window.hide();
         } else {
+            let state = app.state::<AppState>();
+            state
+                .shown_at
+                .lock()
+                .unwrap()
+                .insert(label.to_string(), Instant::now());
             let _ = window.show();
             let _ = window.set_focus();
         }
@@ -143,6 +157,7 @@ fn main() {
     let state = AppState {
         engine: Mutex::new(engine),
         paused: AtomicBool::new(false),
+        shown_at: Mutex::new(HashMap::new()),
     };
 
     tauri::Builder::default()
@@ -205,7 +220,16 @@ fn main() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::Focused(false) = event {
-                let _ = window.hide();
+                let state = window.state::<AppState>();
+                let recently_shown = state
+                    .shown_at
+                    .lock()
+                    .unwrap()
+                    .get(window.label())
+                    .is_some_and(|shown_at| shown_at.elapsed() < SHOW_GRACE_PERIOD);
+                if !recently_shown {
+                    let _ = window.hide();
+                }
             }
         })
         .run(tauri::generate_context!())
