@@ -16,9 +16,19 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetForegroundWindow, GetMessageW,
-    GetWindowLongPtrW, GetWindowThreadProcessId, RegisterClassW, SetWindowLongPtrW,
-    TranslateMessage, GWLP_USERDATA, HWND_MESSAGE, MSG, WM_CLIPBOARDUPDATE, WNDCLASSW,
+    GetWindowLongPtrW, GetWindowThreadProcessId, KillTimer, RegisterClassW, SetTimer,
+    SetWindowLongPtrW, TranslateMessage, GWLP_USERDATA, HWND_MESSAGE, MSG, WM_CLIPBOARDUPDATE,
+    WM_TIMER, WNDCLASSW,
 };
+
+/// How long after a clipboard change to wait before reading it. The OLE
+/// clipboard (.NET, WPF, PowerShell's Set-Clipboard) announces a copy before
+/// it's finished, then reopens the clipboard to render the data. Reading
+/// straight away holds the clipboard open while waiting on that very app to
+/// render, so its reopen fails and the user sees their copy fail. Each new
+/// change restarts the wait, so a burst of writes is read once, when it's done.
+const READ_DELAY_MS: u32 = 100;
+const READ_TIMER_ID: usize = 1;
 
 type Queue = Mutex<VecDeque<IncomingClip>>;
 
@@ -94,6 +104,11 @@ unsafe fn run_listener_message_loop(queue_ptr: *mut Queue) {
 
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if msg == WM_CLIPBOARDUPDATE {
+        SetTimer(hwnd, READ_TIMER_ID, READ_DELAY_MS, None);
+        return LRESULT(0);
+    }
+    if msg == WM_TIMER && wparam.0 == READ_TIMER_ID {
+        let _ = KillTimer(hwnd, READ_TIMER_ID);
         let ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut Queue;
         if !ptr.is_null() {
             if let Some(clip) = read_clipboard_text(hwnd) {
