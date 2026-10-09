@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8" />
-<title>Clipdeck History</title>
+<title>Clipdeck</title>
 <style>
   body { margin: 0; font-family: sans-serif; background: #1e1e1e; color: #eee; }
   ul#list { list-style: none; margin: 0; padding: 0; max-height: 100vh; overflow-y: auto; }
@@ -14,6 +14,7 @@
 <ul id="list"></ul>
 <script>
 const { invoke } = window.__TAURI__.core;
+const mode = new URLSearchParams(window.location.search).get('mode') === 'pinned' ? 'pinned' : 'history';
 let items = [];
 let selected = 0;
 
@@ -30,13 +31,19 @@ function render() {
 }
 
 async function refresh() {
-  items = await invoke('get_history');
-  selected = 0;
+  items = await invoke(mode === 'pinned' ? 'get_pinned' : 'get_history');
+  selected = Math.min(selected, Math.max(items.length - 1, 0));
   render();
 }
 
 function choose(i) {
-  invoke('select_clip', { index: i });
+  invoke(mode === 'pinned' ? 'select_pinned' : 'select_clip', { index: i });
+}
+
+async function togglePin(i) {
+  if (items.length === 0) return;
+  await invoke(mode === 'pinned' ? 'unpin_clip' : 'pin_clip', { index: i });
+  await refresh();
 }
 
 document.addEventListener('keydown', (e) => {
@@ -46,6 +53,8 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'ArrowUp') {
     selected = Math.max(selected - 1, 0);
     render();
+  } else if (e.key === 'Enter' && e.shiftKey) {
+    togglePin(selected);
   } else if (e.key === 'Enter') {
     choose(selected);
   } else if (e.key === 'Escape') {

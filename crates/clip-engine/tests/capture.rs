@@ -1,6 +1,6 @@
 use clip_engine::{
     CaptureOutcome, Clip, ClipContent, ClipEngine, ClipStore, ClipboardSource, EngineConfig,
-    IncomingClip,
+    IncomingClip, PinnedStore,
 };
 use std::collections::VecDeque;
 
@@ -39,6 +39,27 @@ impl ClipStore for InMemoryStore {
     }
 }
 
+#[derive(Default)]
+struct InMemoryPinnedStore {
+    clips: Vec<Clip>,
+}
+
+impl PinnedStore for InMemoryPinnedStore {
+    fn push(&mut self, clip: Clip) {
+        self.clips.push(clip);
+    }
+
+    fn remove(&mut self, index: usize) {
+        if index < self.clips.len() {
+            self.clips.remove(index);
+        }
+    }
+
+    fn all(&self) -> Vec<Clip> {
+        self.clips.clone()
+    }
+}
+
 fn text_clip(text: &str) -> IncomingClip {
     IncomingClip {
         content: ClipContent::Text(text.into()),
@@ -60,7 +81,7 @@ fn history_capacity_is_clamped_to_the_hard_ceiling_of_2000() {
         history_capacity: 5000,
         excluded_apps: Default::default(),
     };
-    let engine = ClipEngine::new(store, config);
+    let engine = ClipEngine::new(store, InMemoryPinnedStore::default(), config);
 
     assert_eq!(engine.history_capacity(), 2000);
 }
@@ -72,7 +93,7 @@ fn history_evicts_the_oldest_clip_once_capacity_is_exceeded() {
         history_capacity: 2,
         excluded_apps: Default::default(),
     };
-    let mut engine = ClipEngine::new(store, config);
+    let mut engine = ClipEngine::new(store, InMemoryPinnedStore::default(), config);
 
     engine.capture(text_clip("first"));
     engine.capture(text_clip("second"));
@@ -100,7 +121,7 @@ fn clips_from_an_excluded_app_are_dropped() {
         history_capacity: 200,
         excluded_apps,
     };
-    let mut engine = ClipEngine::new(store, config);
+    let mut engine = ClipEngine::new(store, InMemoryPinnedStore::default(), config);
 
     let outcome = engine.capture(IncomingClip {
         content: ClipContent::Text("secret".into()),
@@ -119,7 +140,7 @@ fn draining_a_clipboard_source_captures_each_event_in_order() {
         history_capacity: 200,
         excluded_apps: Default::default(),
     };
-    let mut engine = ClipEngine::new(store, config);
+    let mut engine = ClipEngine::new(store, InMemoryPinnedStore::default(), config);
 
     let mut source = FakeSource {
         events: VecDeque::from([text_clip("first"), text_clip("second")]),
@@ -140,7 +161,7 @@ fn clips_marked_concealed_are_dropped() {
         history_capacity: 200,
         excluded_apps: Default::default(),
     };
-    let mut engine = ClipEngine::new(store, config);
+    let mut engine = ClipEngine::new(store, InMemoryPinnedStore::default(), config);
 
     let outcome = engine.capture(IncomingClip {
         content: ClipContent::Text("one-time password".into()),
@@ -159,7 +180,7 @@ fn capturing_a_text_clip_makes_it_appear_in_history() {
         history_capacity: 200,
         excluded_apps: Default::default(),
     };
-    let mut engine = ClipEngine::new(store, config);
+    let mut engine = ClipEngine::new(store, InMemoryPinnedStore::default(), config);
 
     let outcome = engine.capture(IncomingClip {
         content: ClipContent::Text("hello world".into()),

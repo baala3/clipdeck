@@ -11,7 +11,19 @@
     "windows": [
       {
         "label": "history",
+        "url": "index.html",
         "title": "Clipdeck History",
+        "width": 420,
+        "height": 480,
+        "visible": false,
+        "decorations": false,
+        "skipTaskbar": true,
+        "alwaysOnTop": true
+      },
+      {
+        "label": "pinned",
+        "url": "index.html?mode=pinned",
+        "title": "Clipdeck Pinned",
         "width": 420,
         "height": 480,
         "visible": false,

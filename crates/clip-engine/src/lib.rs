@@ -57,14 +57,48 @@ pub trait ClipStore {
     }
 }
 
-pub struct ClipEngine<S: ClipStore> {
+pub trait PinnedStore {
+    fn push(&mut self, clip: Clip);
+    fn remove(&mut self, index: usize);
+    fn all(&self) -> Vec<Clip>;
+}
+
+pub struct ClipEngine<S: ClipStore, P: PinnedStore> {
     store: S,
+    pinned_store: P,
     config: EngineConfig,
 }
 
-impl<S: ClipStore> ClipEngine<S> {
-    pub fn new(store: S, config: EngineConfig) -> Self {
-        Self { store, config }
+impl<S: ClipStore, P: PinnedStore> ClipEngine<S, P> {
+    pub fn new(store: S, pinned_store: P, config: EngineConfig) -> Self {
+        Self {
+            store,
+            pinned_store,
+            config,
+        }
+    }
+
+    pub fn pin(&mut self, history_index: usize) -> bool {
+        match self.store.all().into_iter().nth(history_index) {
+            Some(clip) => {
+                self.pinned_store.push(clip);
+                true
+            }
+            None => false,
+        }
+    }
+
+    pub fn unpin(&mut self, pinned_index: usize) -> bool {
+        if pinned_index < self.pinned_store.all().len() {
+            self.pinned_store.remove(pinned_index);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn pinned(&self) -> Vec<Clip> {
+        self.pinned_store.all()
     }
 
     pub fn capture(&mut self, incoming: IncomingClip) -> CaptureOutcome {
@@ -119,6 +153,81 @@ impl SqliteClipStore {
         )
         .expect("failed to create clips table");
         Self { conn }
+    }
+}
+
+pub struct SqlitePinnedStore {
+    conn: Connection,
+}
+
+impl SqlitePinnedStore {
+    pub fn open(path: &str) -> Self {
+        let conn = Connection::open(path).expect("failed to open sqlite pinned store");
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS pinned_clips (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                text TEXT,
+                image BLOB,
+                source_app TEXT
+            )",
+            (),
+        )
+        .expect("failed to create pinned_clips table");
+        Self { conn }
+    }
+}
+
+impl PinnedStore for SqlitePinnedStore {
+    fn push(&mut self, clip: Clip) {
+        let (text, image) = match clip.content {
+            ClipContent::Text(text) => (Some(text), None),
+            ClipContent::Image(bytes) => (None, Some(bytes)),
+        };
+        self.conn
+            .execute(
+                "INSERT INTO pinned_clips (text, image, source_app) VALUES (?1, ?2, ?3)",
+                (&text, &image, &clip.source_app),
+            )
+            .expect("failed to insert pinned clip");
+    }
+
+    fn remove(&mut self, index: usize) {
+        let ids: Vec<i64> = self
+            .conn
+            .prepare("SELECT id FROM pinned_clips ORDER BY id ASC")
+            .expect("failed to prepare select ids")
+            .query_map((), |row| row.get(0))
+            .expect("failed to query ids")
+            .map(|row| row.expect("failed to read id"))
+            .collect();
+        if let Some(id) = ids.get(index) {
+            self.conn
+                .execute("DELETE FROM pinned_clips WHERE id = ?1", (id,))
+                .expect("failed to delete pinned clip");
+        }
+    }
+
+    fn all(&self) -> Vec<Clip> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT text, image, source_app FROM pinned_clips ORDER BY id ASC")
+            .expect("failed to prepare select");
+        stmt.query_map((), |row| {
+            let text: Option<String> = row.get(0)?;
+            let image: Option<Vec<u8>> = row.get(1)?;
+            let source_app: Option<String> = row.get(2)?;
+            let content = match text {
+                Some(text) => ClipContent::Text(text),
+                None => ClipContent::Image(image.unwrap_or_default()),
+            };
+            Ok(Clip {
+                content,
+                source_app,
+            })
+        })
+        .expect("failed to query pinned clips")
+        .map(|row| row.expect("failed to read pinned clip row"))
+        .collect()
     }
 }
 
