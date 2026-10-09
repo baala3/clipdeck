@@ -90,7 +90,10 @@ fn snapshot(app: &AppHandle) -> Snapshot {
 struct BuiltMenu {
     menu: Menu<Wry>,
     targets: HashMap<String, Target>,
-    /// Number shortcut digit -> target, for the first ten items.
+    /// Number shortcut digit -> target, for the first ten items. Only Windows
+    /// needs it: a digit pressed in an open menu there is caught by a keyboard
+    /// hook, while macOS delivers it as a click on the item's accelerator.
+    #[cfg(windows)]
     digits: HashMap<char, Target>,
 }
 
@@ -102,6 +105,7 @@ fn build(
 ) -> tauri::Result<BuiltMenu> {
     let menu = Menu::new(app)?;
     let mut built_targets = HashMap::new();
+    #[cfg(windows)]
     let mut digits = HashMap::new();
     let mut section =
         |title: &str, list: List, texts: &[String], with_digits: bool| -> tauri::Result<()> {
@@ -136,6 +140,7 @@ fn build(
                 let accelerator = model
                     .shortcut_digit
                     .and_then(|digit| accelerator(number_modifier, digit));
+                #[cfg(windows)]
                 if accelerator.is_some() {
                     digits.insert(model.shortcut_digit.unwrap(), target.clone());
                 }
@@ -228,6 +233,7 @@ fn build(
     Ok(BuiltMenu {
         menu,
         targets: built_targets,
+        #[cfg(windows)]
         digits,
     })
 }

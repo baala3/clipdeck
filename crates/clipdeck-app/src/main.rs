@@ -33,6 +33,7 @@ struct AppState {
     /// Whatever window was focused right before a popup menu opened (Windows
     /// HWND as a raw value; 0 means none captured). Focus goes back there, and
     /// a chosen Clip is pasted into it.
+    #[cfg(windows)]
     previous_foreground: Mutex<isize>,
     menu_targets: Mutex<MenuTargets>,
     /// A popup menu is modal; a hotkey pressed while one is open is ignored.
@@ -125,6 +126,7 @@ fn main() {
                 settings: Mutex::new(settings_state),
                 active_settings: Mutex::new(current),
                 hotkeys: Mutex::new(hotkeys),
+                #[cfg(windows)]
                 previous_foreground: Mutex::new(0),
                 menu_targets: Mutex::new(MenuTargets::default()),
                 menu_open: AtomicBool::new(false),
