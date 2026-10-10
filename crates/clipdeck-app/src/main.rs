@@ -45,6 +45,7 @@ fn spawn_capture_thread(app: tauri::AppHandle, mut source: impl ClipboardSource 
         std::thread::sleep(std::time::Duration::from_millis(200));
         let state = app.state::<AppState>();
         if state.paused.load(Ordering::SeqCst) {
+            state.engine.lock().unwrap().discard(&mut source);
             continue;
         }
         let mut captured = false;
@@ -93,6 +94,12 @@ fn store_path(app: &tauri::App, file_name: &str) -> PathBuf {
 
 fn main() {
     tauri::Builder::default()
+        // Must be the first plugin. A second Clipdeck would capture every copy
+        // twice and fight this one for the hotkeys, so it hands over and exits;
+        // opening Settings shows the user that Clipdeck is already running.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            settings::show_settings_window_at(app, None);
+        }))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())

@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use windows::Win32::System::DataExchange::{
-    CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
+    CloseClipboard, EmptyClipboard, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
 };
 use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
 use windows::Win32::System::Ole::CF_UNICODETEXT;
@@ -19,6 +19,13 @@ static CLIPBOARD: Mutex<()> = Mutex::new(());
 /// real app does. With a NULL owner, `EmptyClipboard` leaves the clipboard
 /// ownerless and `SetClipboardData` is not reliable.
 fn set_real_clipboard_text(text: &str) {
+    set_real_clipboard(text, &[]);
+}
+
+/// Like `set_real_clipboard_text`, plus extra named clipboard formats in the
+/// same write, each holding a DWORD. Password managers add such formats to
+/// tell clipboard tools to leave a copy alone.
+fn set_real_clipboard(text: &str, markers: &[(windows::core::PCWSTR, u32)]) {
     unsafe {
         let owner = CreateWindowExW(
             Default::default(),
@@ -51,6 +58,14 @@ fn set_real_clipboard_text(text: &str) {
             windows::Win32::Foundation::HANDLE(hglobal.0),
         )
         .expect("SetClipboardData failed");
+        for (name, value) in markers {
+            let format = RegisterClipboardFormatW(*name);
+            let hglobal = GlobalAlloc(GMEM_MOVEABLE, 4).expect("GlobalAlloc failed");
+            *(GlobalLock(hglobal) as *mut u32) = *value;
+            let _ = GlobalUnlock(hglobal);
+            SetClipboardData(format, windows::Win32::Foundation::HANDLE(hglobal.0))
+                .expect("SetClipboardData failed");
+        }
         let _ = CloseClipboard();
     }
 }
@@ -139,4 +154,33 @@ fn apps_copying_through_the_ole_clipboard_are_not_locked_out_while_listening() {
         std::thread::sleep(Duration::from_millis(20));
     }
     assert_eq!(last, Some(ClipContent::Text("ole copy 5".into())));
+}
+
+#[test]
+fn copies_an_app_marks_as_not_for_clipboard_tools_are_reported_concealed() {
+    use windows::core::w;
+    let _clipboard = CLIPBOARD.lock().unwrap_or_else(|e| e.into_inner());
+    let mut source = WindowsClipboardSource::new();
+    std::thread::sleep(Duration::from_millis(200));
+
+    // What KeePass, 1Password and Bitwarden write alongside a password.
+    for (text, marker) in [
+        (
+            "secret one",
+            (w!("ExcludeClipboardContentFromMonitorProcessing"), 0),
+        ),
+        ("secret two", (w!("CanIncludeInClipboardHistory"), 0)),
+        ("secret three", (w!("Clipboard Viewer Ignore"), 0)),
+    ] {
+        set_real_clipboard(text, &[marker]);
+        let event = wait_for_event(&mut source);
+        assert_eq!(event.content, ClipContent::Text(text.into()));
+        assert!(event.concealed, "{text} should be concealed");
+    }
+
+    // An app that says history is fine is captured as usual.
+    set_real_clipboard("not secret", &[(w!("CanIncludeInClipboardHistory"), 1)]);
+    let event = wait_for_event(&mut source);
+    assert_eq!(event.content, ClipContent::Text("not secret".into()));
+    assert!(!event.concealed);
 }

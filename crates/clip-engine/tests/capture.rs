@@ -171,6 +171,41 @@ fn draining_a_clipboard_source_captures_each_event_in_order() {
 }
 
 #[test]
+fn clips_copied_while_capture_is_paused_never_reach_history_after_resuming() {
+    let mut engine = ClipEngine::new(
+        InMemoryStore::default(),
+        InMemoryPinnedStore::default(),
+        EngineConfig::default(),
+    );
+    let mut source = FakeSource {
+        events: VecDeque::from([text_clip("copied while paused")]),
+    };
+
+    engine.discard(&mut source);
+    // Capture resumes, and the user copies something else.
+    source.events.push_back(text_clip("copied after resuming"));
+    engine.drain(&mut source);
+
+    assert_eq!(history_texts(&engine), vec!["copied after resuming"]);
+}
+
+#[test]
+fn text_that_is_only_whitespace_is_dropped() {
+    let mut engine = ClipEngine::new(
+        InMemoryStore::default(),
+        InMemoryPinnedStore::default(),
+        EngineConfig::default(),
+    );
+
+    for blank in ["", "   ", "\r\n\t \n"] {
+        assert_eq!(engine.capture(text_clip(blank)), CaptureOutcome::Dropped);
+    }
+    assert_eq!(engine.capture(text_clip("  x  ")), CaptureOutcome::Captured);
+
+    assert_eq!(history_texts(&engine), vec!["  x  "]);
+}
+
+#[test]
 fn clips_marked_concealed_are_dropped() {
     let store = InMemoryStore::default();
     let config = EngineConfig {

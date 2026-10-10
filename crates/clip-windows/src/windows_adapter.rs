@@ -6,7 +6,8 @@ use std::thread;
 use windows::core::{w, PWSTR};
 use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::DataExchange::{
-    AddClipboardFormatListener, CloseClipboard, GetClipboardData, GetClipboardOwner, OpenClipboard,
+    AddClipboardFormatListener, CloseClipboard, GetClipboardData, GetClipboardOwner,
+    IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
@@ -159,13 +160,40 @@ unsafe fn read_clipboard_text(listener: HWND) -> Option<IncomingClip> {
         Some(text)
     })();
 
+    let concealed = is_concealed();
     let _ = CloseClipboard();
 
     text.map(|text| IncomingClip {
         content: ClipContent::Text(text),
         source_app: source_app_name(),
-        concealed: false,
+        concealed,
     })
+}
+
+/// Whether the app that copied asked clipboard tools to leave this alone, the
+/// way password managers do. Windows has no single flag for it; these are the
+/// formats Microsoft documents for its own clipboard history, plus the older
+/// "Clipboard Viewer Ignore" convention. Call with the clipboard open.
+unsafe fn is_concealed() -> bool {
+    let present = |name| IsClipboardFormatAvailable(RegisterClipboardFormatW(name)).is_ok();
+    if present(w!("ExcludeClipboardContentFromMonitorProcessing"))
+        || present(w!("Clipboard Viewer Ignore"))
+    {
+        return true;
+    }
+    // Present with a zero DWORD means "keep this out of history".
+    let Ok(handle) = GetClipboardData(RegisterClipboardFormatW(w!("CanIncludeInClipboardHistory")))
+    else {
+        return false;
+    };
+    let hglobal = windows::Win32::Foundation::HGLOBAL(handle.0);
+    let ptr = GlobalLock(hglobal) as *const u32;
+    if ptr.is_null() {
+        return false;
+    }
+    let include = ptr.read_unaligned();
+    let _ = GlobalUnlock(hglobal);
+    include == 0
 }
 
 /// The executable name (e.g. "KeePass.exe") of the app that just wrote to the

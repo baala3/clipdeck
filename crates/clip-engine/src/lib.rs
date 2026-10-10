@@ -171,6 +171,11 @@ impl<S: ClipStore, P: PinnedStore> ClipEngine<S, P> {
         if incoming.concealed {
             return CaptureOutcome::Dropped;
         }
+        // Copying a stray space or line break isn't worth a row in the menu,
+        // where it would show up blank.
+        if matches!(&incoming.content, ClipContent::Text(text) if text.trim().is_empty()) {
+            return CaptureOutcome::Dropped;
+        }
         if let Some(app) = &incoming.source_app {
             let app = normalize_app_name(app);
             if self
@@ -252,6 +257,13 @@ impl<S: ClipStore, P: PinnedStore> ClipEngine<S, P> {
 
     pub fn history_capacity(&self) -> usize {
         self.config.history_capacity.min(MAX_HISTORY_CAPACITY)
+    }
+
+    /// Throws away whatever `source` has seen, for while capture is paused.
+    /// Left in the source, those copies would be captured the moment capture
+    /// resumes.
+    pub fn discard(&mut self, source: &mut impl ClipboardSource) {
+        while source.next_event().is_some() {}
     }
 
     pub fn drain(&mut self, source: &mut impl ClipboardSource) {
