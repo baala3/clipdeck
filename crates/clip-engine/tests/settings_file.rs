@@ -1,4 +1,4 @@
-use clip_engine::{Settings, SettingsFile, ShortcutModifier};
+use clip_engine::{Appearance, Settings, SettingsFile, ShortcutModifier};
 
 fn settings_path(dir: &tempfile::TempDir) -> std::path::PathBuf {
     dir.path().join("settings.toml")
@@ -15,6 +15,7 @@ fn loading_a_missing_settings_file_creates_it_with_the_defaults() {
         settings,
         Settings {
             launch_at_login: true,
+            appearance: Appearance::System,
             main_hotkey: "CommandOrControl+Shift+V".into(),
             history_hotkey: "CommandOrControl+Alt+V".into(),
             pinned_hotkey: "CommandOrControl+Shift+B".into(),
@@ -155,6 +156,25 @@ fn menu_numbering_is_on_unless_the_settings_file_turns_it_off() {
     std::fs::write(&path, "menu_show_numbers = false\n").unwrap();
     let settings = SettingsFile::new(&path).load().unwrap();
     assert!(!settings.menu_layout().show_numbers);
+}
+
+#[test]
+fn appearance_follows_the_system_unless_the_settings_file_picks_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = settings_path(&dir);
+    std::fs::write(&path, "history_capacity = 50\n").unwrap();
+    let mut file = SettingsFile::new(&path);
+    let mut settings = file.load().unwrap();
+    assert_eq!(settings.appearance, Appearance::System);
+
+    settings.appearance = Appearance::Dark;
+    file.save(&settings).unwrap();
+    let written = std::fs::read_to_string(&path).unwrap();
+    assert!(written.contains("appearance = \"Dark\""), "{written}");
+    assert_eq!(file.load().unwrap().appearance, Appearance::Dark);
+
+    std::fs::write(&path, "appearance = \"Sepia\"\n").unwrap();
+    assert!(file.load().is_err(), "an unknown appearance is rejected");
 }
 
 #[test]

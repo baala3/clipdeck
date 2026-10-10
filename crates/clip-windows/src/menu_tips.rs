@@ -15,7 +15,6 @@ use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTONEAREST,
 };
-use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::Controls::{
     SetWindowTheme, TOOLTIPS_CLASSW, TTF_ABSOLUTE, TTF_TRACK, TTM_ADDTOOLW, TTM_SETMARGIN,
@@ -179,9 +178,8 @@ impl State {
             WPARAM(0),
             LPARAM(scale(MAX_WIDTH) as isize),
         );
-        // Menus follow the system's app theme; a light tooltip beside a dark
-        // menu would glare.
-        let theme = if apps_use_dark_theme() {
+        // A light tooltip beside a dark menu would glare.
+        let theme = if crate::appearance::menus_are_dark() {
             w!("DarkMode_Explorer")
         } else {
             w!("Explorer")
@@ -284,23 +282,6 @@ impl State {
         }
         self.tooltip
     }
-}
-
-fn apps_use_dark_theme() -> bool {
-    let mut light: u32 = 1;
-    let mut size = std::mem::size_of::<u32>() as u32;
-    let read = unsafe {
-        RegGetValueW(
-            HKEY_CURRENT_USER,
-            w!("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"),
-            w!("AppsUseLightTheme"),
-            RRF_RT_REG_DWORD,
-            None,
-            Some(&mut light as *mut u32 as *mut _),
-            Some(&mut size),
-        )
-    };
-    read.is_ok() && light == 0
 }
 
 /// The one "tool" our tooltip has: not tied to a window, placed by hand.
