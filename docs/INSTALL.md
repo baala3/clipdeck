@@ -1,32 +1,28 @@
 # Installing Clipdeck
 
-Clipdeck is not distributed through any app store.
-Download it from the [GitHub Releases page](https://github.com/baala3/clipdeck/releases/latest).
+Clipdeck is installed with one command, on both Windows and macOS.
+There is no installer to download and no app store.
+
 Once installed, Clipdeck keeps itself up to date: it checks for a new version shortly after it starts and once a day, and asks before installing one.
 You can also check from Settings > About.
 
 Clipdeck starts at login by default.
 Turn that off in Settings > General.
 
-Clipdeck is unsigned (see [ADR-0002](adr/0002-ship-unsigned.md)), so both Windows and macOS warn you the first time you open a copy downloaded with a browser.
-The one-line installs below avoid the warning, because the operating systems only check files that a browser downloaded.
-If you download by hand instead, the steps below get past the warning once; updates don't ask again.
-
 ## Windows
 
+Clipdeck runs on 64-bit Windows 10 and 11.
 Open PowerShell and run:
 
 ```powershell
 irm https://raw.githubusercontent.com/baala3/clipdeck/main/install.ps1 | iex
 ```
 
-This downloads the latest installer, runs it, and starts Clipdeck.
+This downloads the latest version, installs it, and starts Clipdeck.
+It installs for your user only, so it doesn't need administrator rights.
+Run the same command again any time to reinstall or to jump to the latest version.
 
-To install by hand instead, download `Clipdeck_<version>_x64-setup.exe` and run it.
-Either way it installs for your user only, so it doesn't need administrator rights.
-
-- **SmartScreen** ("Windows protected your PC"), for an installer downloaded by hand: click "More info", then "Run anyway".
-- **Smart App Control**: on some Windows 11 machines this blocks unsigned apps outright, with no per-file "run anyway" option.
+- **Smart App Control**: on some Windows 11 machines this blocks unsigned apps outright, with no "run anyway" option, and the command can't get around it.
   There is currently no workaround besides real code signing, or turning Smart App Control off entirely - which Microsoft says requires reinstalling Windows to undo, so we don't recommend it.
   See [ADR-0002](adr/0002-ship-unsigned.md) for details.
 
@@ -54,13 +50,7 @@ curl -fsSL https://raw.githubusercontent.com/baala3/clipdeck/main/install.sh | s
 ```
 
 This downloads the latest version into Applications and starts it.
-
-To install by hand instead, download `Clipdeck_<version>_universal.dmg`, open it, and drag Clipdeck into Applications.
-The first time you open a copy installed that way, macOS says it can't verify the developer.
-
-- **Already blocked**: run `xattr -dr com.apple.quarantine /Applications/Clipdeck.app` in Terminal, then open Clipdeck again.
-- **macOS 15 (Sequoia) and later**: click "Done", then open System Settings > Privacy & Security, scroll down to the message about Clipdeck, and click "Open Anyway".
-- **macOS 14 and earlier**: Control-click Clipdeck in Applications, choose "Open", then "Open" again.
+Run the same command again any time to reinstall or to jump to the latest version.
 
 Clipdeck lives in the menu bar and has no Dock icon.
 
@@ -71,3 +61,12 @@ If pasting stops working after an update, switch Clipdeck off and on again in th
 Settings, History, and Pinned items are kept in `~/Library/Application Support/dev.clipdeck.app`.
 
 To uninstall, quit Clipdeck from its menu bar icon, drag it from Applications to the Trash, and delete `~/Library/Application Support/dev.clipdeck.app` and `~/Library/LaunchAgents/Clipdeck.plist`.
+
+## Why a command
+
+Clipdeck is unsigned ([ADR-0002](adr/0002-ship-unsigned.md)).
+Windows and macOS only distrust an unsigned app when a browser downloaded it: Windows shows a SmartScreen warning, and macOS refuses to open it.
+A download made by PowerShell or `curl` isn't marked that way, so the same app installs and opens normally.
+That makes the commands the one route that works for everyone, and the only one we offer ([ADR-0009](adr/0009-install-by-command-only.md)).
+
+The scripts are short: read [install.ps1](../install.ps1) and [install.sh](../install.sh) before running them if you like.

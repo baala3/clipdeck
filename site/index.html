@@ -196,7 +196,6 @@ try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dat
   .command button { flex: none; min-width: 64px; font: 600 12.5px/1 system-ui, sans-serif; color: var(--code-text); background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 6px; padding: 7px 10px; cursor: pointer; }
   .command button:hover { background: rgba(255, 255, 255, 0.18); }
   .card .after { font-size: 14.5px; color: var(--muted); margin-top: 14px; flex: 1; }
-  .card .btn { margin-top: 20px; align-self: flex-start; font-size: 15px; padding: 10px 16px; }
 
   /* FAQ */
   .faq { margin-top: 32px; max-width: 760px; border-top: 1px solid var(--border); }
@@ -389,7 +388,6 @@ try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dat
             <button type="button">Copy</button>
           </div>
           <p class="after">No administrator rights needed. Clipdeck then lives in the notification area, next to the clock.</p>
-          <a class="btn" href="https://github.com/baala3/clipdeck/releases/latest">Download the installer instead</a>
         </div>
 
         <div class="card" data-os="mac">
@@ -406,7 +404,6 @@ try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dat
             <button type="button">Copy</button>
           </div>
           <p class="after">Clipdeck then lives in the menu bar. The first time you choose a Clip, macOS asks you to allow Accessibility so it can paste for you.</p>
-          <a class="btn" href="https://github.com/baala3/clipdeck/releases/latest">Download the .dmg instead</a>
         </div>
       </div>
     </div>
@@ -423,9 +420,9 @@ try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dat
           <p>Yes. There is no subscription, no paid tier and no ads. The code is open source under the MIT License.</p>
         </details>
         <details>
-          <summary>Why does my computer warn me about a download?</summary>
-          <p>Clipdeck is not signed with a paid developer certificate, so Windows and macOS warn about a copy downloaded with a browser. The one-line install above avoids the warning.</p>
-          <p>If you downloaded it by hand, the <a href="https://github.com/baala3/clipdeck/blob/main/docs/INSTALL.md">install guide</a> shows how to get past the warning once. Updates do not ask again.</p>
+          <summary>Why a command and not a download button?</summary>
+          <p>Clipdeck is not signed with a paid developer certificate. Windows warns about an unsigned app downloaded with a browser, and macOS refuses to open one. The one-line command installs the same app without either problem.</p>
+          <p>The scripts are short and you can read them first: <a href="https://github.com/baala3/clipdeck/blob/main/install.ps1">install.ps1</a> for Windows and <a href="https://github.com/baala3/clipdeck/blob/main/install.sh">install.sh</a> for macOS. Some Windows 11 PCs have Smart App Control switched on, which blocks unsigned apps either way; the <a href="https://github.com/baala3/clipdeck/blob/main/docs/INSTALL.md">install guide</a> explains.</p>
         </details>
         <details>
           <summary>Where are my Clips stored?</summary>
@@ -457,7 +454,7 @@ try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dat
     <span>Clipdeck is open source under the MIT License.</span>
     <nav aria-label="Footer">
       <a href="https://github.com/baala3/clipdeck">Source code</a>
-      <a href="https://github.com/baala3/clipdeck/releases">Releases</a>
+      <a href="https://github.com/baala3/clipdeck/releases">What's new</a>
       <a href="https://github.com/baala3/clipdeck/issues">Report a problem</a>
     </nav>
   </div>

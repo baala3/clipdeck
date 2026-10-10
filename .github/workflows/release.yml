@@ -3,7 +3,7 @@ name: Release
 # The only way Clipdeck ships. Run it from the Actions tab (or
 # `gh workflow run release.yml -f version=0.4.0`) with the new version number.
 # It bumps the version on main, tags it, builds the Windows installer and the
-# macOS .dmg, and publishes them as the latest GitHub Release, which is what
+# macOS app, and publishes them as the latest GitHub Release, which is what
 # the one-line installers and the in-app updater read. See docs/RELEASING.md.
 
 on:
@@ -113,7 +113,7 @@ jobs:
           - name: macOS
             os: macos-latest
             rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
-            bundle_args: --target universal-apple-darwin --bundles app,dmg
+            bundle_args: --target universal-apple-darwin --bundles app
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

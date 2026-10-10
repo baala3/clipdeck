@@ -20,8 +20,7 @@ Users get Clipdeck from the newest published GitHub Release, whichever way they 
 
 | How they install | What it reads |
 | --- | --- |
-| One-line command (`install.ps1`, `install.sh`) | `releases/latest` |
-| Download from the Releases page | `releases/latest` |
+| One-line command (`install.ps1`, `install.sh`), the only install we document ([ADR-0009](adr/0009-install-by-command-only.md)) | `releases/latest` |
 | Already installed (in-app updater, checks daily) | `releases/latest/download/latest.json` |
 
 So the install commands change exactly when a release is published, and never because of a merge.
@@ -40,7 +39,7 @@ The workflow then:
 
 1. checks the version is newer than the current one, and bumps it in `crates/clipdeck-app/Cargo.toml` and `Cargo.lock`;
 2. commits that to `main` as "Release 0.4.0" and tags it `v0.4.0`;
-3. builds the Windows installer and the universal macOS `.dmg` on GitHub's own runners, never on a dev machine (see [ADR-0007](adr/0007-ci-built-installers-with-auto-update.md));
+3. builds the Windows installer and the universal macOS app on GitHub's own runners, never on a dev machine (see [ADR-0007](adr/0007-ci-built-installers-with-auto-update.md));
 4. publishes them as the latest release, once both builds have succeeded;
 5. checks that the install commands now serve the new version.
 
@@ -51,7 +50,8 @@ If a build fails, nothing is published and users keep the previous version.
 
 - **notes**: what's new, shown on the release page and in the in-app update prompt.
   Left empty, it is the list of PRs merged since the last release.
-- **draft**: stops before publishing, so you can download the installers from the draft release and try them first.
+- **draft**: stops before publishing, so you can try the build first.
+  Fetch its files with `gh release download v0.4.0`, which, unlike a browser download, does not trip the unsigned-app warnings.
   Publish the draft from the Releases page (or `gh release edit v0.4.0 --draft=false --latest`) when you're happy with it.
   Use this for risky changes; installed copies are only offered a release once it is published.
 
