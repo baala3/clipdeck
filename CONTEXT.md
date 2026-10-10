@@ -6,6 +6,7 @@ A lightweight, cross-platform clipboard manager. It captures what you copy, lets
 
 **Clip**:
 A single entry automatically captured the moment the user copies something (text or image) to the system clipboard.
+A copy is not captured when it is only whitespace, when its app marked it as not for clipboard tools (as password managers do), when its app is on the Exclusion list, or while capture is paused; copies made during a pause are not picked up afterwards either.
 _Avoid_: Entry, item, clipboard entry
 
 **History**:
