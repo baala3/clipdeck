@@ -8,15 +8,24 @@ You can also check from Settings > About.
 Clipdeck starts at login by default.
 Turn that off in Settings > General.
 
-Clipdeck is unsigned (see [ADR-0002](adr/0002-ship-unsigned.md)), so both Windows and macOS warn you the first time you open it.
-The steps below get past that once; updates don't ask again.
+Clipdeck is unsigned (see [ADR-0002](adr/0002-ship-unsigned.md)), so both Windows and macOS warn you the first time you open a copy downloaded with a browser.
+The one-line installs below avoid the warning, because the operating systems only check files that a browser downloaded.
+If you download by hand instead, the steps below get past the warning once; updates don't ask again.
 
 ## Windows
 
-Download `Clipdeck_<version>_x64-setup.exe` and run it.
-It installs for your user only, so it doesn't need administrator rights.
+Open PowerShell and run:
 
-- **SmartScreen** ("Windows protected your PC"): click "More info", then "Run anyway".
+```powershell
+irm https://raw.githubusercontent.com/baala3/clipdeck/main/install.ps1 | iex
+```
+
+This downloads the latest installer, runs it, and starts Clipdeck.
+
+To install by hand instead, download `Clipdeck_<version>_x64-setup.exe` and run it.
+Either way it installs for your user only, so it doesn't need administrator rights.
+
+- **SmartScreen** ("Windows protected your PC"), for an installer downloaded by hand: click "More info", then "Run anyway".
 - **Smart App Control**: on some Windows 11 machines this blocks unsigned apps outright, with no per-file "run anyway" option.
   There is currently no workaround besides real code signing, or turning Smart App Control off entirely - which Microsoft says requires reinstalling Windows to undo, so we don't recommend it.
   See [ADR-0002](adr/0002-ship-unsigned.md) for details.
@@ -37,11 +46,19 @@ The old folder can then be deleted.
 
 ## macOS
 
-Download `Clipdeck_<version>_universal.dmg`, open it, and drag Clipdeck into Applications.
-It runs on macOS 11 or later, on both Apple silicon and Intel Macs.
+Clipdeck runs on macOS 11 or later, on both Apple silicon and Intel Macs.
+Open Terminal and run:
 
-The first time you open it, macOS says it can't verify the developer.
+```sh
+curl -fsSL https://raw.githubusercontent.com/baala3/clipdeck/main/install.sh | sh
+```
 
+This downloads the latest version into Applications and starts it.
+
+To install by hand instead, download `Clipdeck_<version>_universal.dmg`, open it, and drag Clipdeck into Applications.
+The first time you open a copy installed that way, macOS says it can't verify the developer.
+
+- **Already blocked**: run `xattr -dr com.apple.quarantine /Applications/Clipdeck.app` in Terminal, then open Clipdeck again.
 - **macOS 15 (Sequoia) and later**: click "Done", then open System Settings > Privacy & Security, scroll down to the message about Clipdeck, and click "Open Anyway".
 - **macOS 14 and earlier**: Control-click Clipdeck in Applications, choose "Open", then "Open" again.
 

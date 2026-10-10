@@ -9,3 +9,5 @@ No subscription, no monetization, no app store.
 See [docs/INSTALL.md](docs/INSTALL.md) to download and run it, and [CONTEXT.md](CONTEXT.md) for the project's glossary and domain language.
 
 Design decisions are recorded as ADRs in [docs/adr/](docs/adr/).
+
+Clipdeck is released under the [MIT License](LICENSE).
