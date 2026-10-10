@@ -2,6 +2,7 @@
 name = "clip-windows"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 
 [dependencies]
 clip-engine = { path = "../clip-engine" }
