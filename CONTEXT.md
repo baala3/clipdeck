@@ -30,7 +30,7 @@ The native, Clipy-style menu a global hotkey opens at the mouse cursor: the main
 _Avoid_: Popup, window, panel (reserve "window" for the Settings Window)
 
 **Settings Window**:
-The only persistent, full application window. Opened from the Menu's "Settings..." or "Edit Pinned..." items - never opened just to browse or paste Clips. Houses all end-user-facing configuration (hotkeys, Menu layout and modifiers, History capacity, exclusion list, encryption toggle) and is where pinned items are written and edited.
+The only persistent, full application window. Opened from the Menu's "Settings..." or "Edit Pinned..." items - never opened just to browse or paste Clips. Houses all end-user-facing configuration (light or dark appearance, hotkeys, Menu layout and modifiers, History capacity, exclusion list, encryption toggle) and is where pinned items are written and edited.
 _Avoid_: Preferences pane, main window
 
 **Exclusion list**:

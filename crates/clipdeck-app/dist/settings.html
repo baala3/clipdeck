@@ -136,6 +136,10 @@
       <label for="launch-at-login">Start Clipdeck at login</label>
       <span class="switch"><input id="launch-at-login" type="checkbox" role="switch" /><span></span></span>
     </div>
+    <div class="row">
+      <label for="appearance">Appearance</label>
+      <select id="appearance" data-field="appearance"></select>
+    </div>
   </div>
 </section>
 
@@ -273,7 +277,7 @@ const excludedList = document.getElementById('excluded-list');
 const excludeForm = document.getElementById('exclude-form');
 const excludeInput = document.getElementById('exclude-input');
 const hotkeyButtons = document.querySelectorAll('.hotkey');
-const modifierSelects = document.querySelectorAll('select[data-field]');
+const selects = document.querySelectorAll('select[data-field]');
 const numberInputs = document.querySelectorAll('input.number[data-field]');
 const pinnedList = document.getElementById('pinned-list');
 const launchAtLogin = document.getElementById('launch-at-login');
@@ -323,7 +327,7 @@ function render() {
   });
   launchAtLogin.checked = settings.launch_at_login;
   showNumbers.checked = settings.menu_show_numbers;
-  modifierSelects.forEach((select) => { select.value = settings[select.dataset.field]; });
+  selects.forEach((select) => { select.value = settings[select.dataset.field]; });
   numberInputs.forEach((input) => {
     if (document.activeElement !== input) input.value = settings[input.dataset.field];
   });
@@ -486,10 +490,10 @@ excludeForm.addEventListener('submit', (e) => {
   update({ excluded_apps: [...existing, app] });
 });
 
-// Menu modifiers. Number shortcuts can use a bare digit; click actions can't
-// (a plain click pastes).
+// Dropdowns: appearance and the menu modifiers. Number shortcuts can use a
+// bare digit; click actions can't (a plain click pastes).
 const MOD = isMac ? '⌘' : 'Ctrl';
-const MODIFIER_OPTIONS = {
+const SELECT_OPTIONS = {
   number_shortcut_modifier: [
     ['CommandOrControl', `${MOD} + number`],
     ['Alt', `${isMac ? '⌥' : 'Alt'} + number`],
@@ -503,10 +507,15 @@ const MODIFIER_OPTIONS = {
     ['Off', 'Off'],
   ],
 };
-MODIFIER_OPTIONS.pin_modifier = MODIFIER_OPTIONS.delete_modifier;
+SELECT_OPTIONS.pin_modifier = SELECT_OPTIONS.delete_modifier;
+SELECT_OPTIONS.appearance = [
+  ['System', 'Match system'],
+  ['Light', 'Light'],
+  ['Dark', 'Dark'],
+];
 
-modifierSelects.forEach((select) => {
-  for (const [value, label] of MODIFIER_OPTIONS[select.dataset.field]) {
+selects.forEach((select) => {
+  for (const [value, label] of SELECT_OPTIONS[select.dataset.field]) {
     const option = document.createElement('option');
     option.value = value;
     option.textContent = label;
