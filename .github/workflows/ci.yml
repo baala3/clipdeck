@@ -1,0 +1,72 @@
+name: CI
+
+# Lints and tests every PR and every push to main, on real Windows and macOS
+# runners. It does not build installers and never ships anything: that is the
+# Release workflow's job. See docs/RELEASING.md.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: &not-code
+      - "site/**"
+      - "docs/**"
+      - "**.md"
+      - "LICENSE"
+      - "install.sh"
+      - "install.ps1"
+      - ".github/workflows/pages.yml"
+      - ".github/workflows/release.yml"
+  pull_request:
+    paths-ignore: *not-code
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  engine:
+    name: Engine (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # PRs read the cache main wrote; saving one per PR only costs time.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+
+  app:
+    name: App (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            platform_crate: clip-windows
+          - name: macOS
+            os: macos-latest
+            platform_crate: clip-macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo clippy -p clipdeck-app -p ${{ matrix.platform_crate }} --all-targets -- -D warnings
+      - run: cargo test -p ${{ matrix.platform_crate }}

@@ -1,0 +1,166 @@
+name: Release
+
+# The only way Clipdeck ships. Run it from the Actions tab (or
+# `gh workflow run release.yml -f version=0.4.0`) with the new version number.
+# It bumps the version on main, tags it, builds the Windows installer and the
+# macOS .dmg, and publishes them as the latest GitHub Release, which is what
+# the one-line installers and the in-app updater read. See docs/RELEASING.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: New version, like 0.4.0
+        required: true
+        type: string
+      notes:
+        description: What's new, shown on the release page and in the update prompt (default - the list of merged PRs)
+        required: false
+        type: string
+      draft:
+        description: Stop at a draft so I can test the installers before publishing
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  # Must stay compatible with the tauri crate version in Cargo.lock.
+  TAURI_CLI: "@tauri-apps/cli@2.12.1"
+  VERSION: ${{ inputs.version }}
+  TAG: v${{ inputs.version }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  prepare:
+    name: Bump the version and tag it
+    runs-on: ubuntu-latest
+    outputs:
+      notes: ${{ steps.notes.outputs.notes }}
+    steps:
+      - name: Check the request
+        env:
+          HAS_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+          [ "$GITHUB_REF" = "refs/heads/main" ] || fail "Releases are cut from main, not $GITHUB_REF_NAME."
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "The version must look like 0.4.0, without a leading v. Got '$VERSION'."
+          [ "$HAS_SIGNING_KEY" = "true" ] || fail "The TAURI_SIGNING_PRIVATE_KEY secret is missing, so updates could not be signed."
+
+      - uses: actions/checkout@v4
+
+      - name: Bump the version
+        run: |
+          current=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/clipdeck-app/Cargo.toml | head -n 1)
+          if [ "$current" = "$VERSION" ] || [ "$(printf '%s\n' "$current" "$VERSION" | sort -V | tail -n 1)" != "$VERSION" ]; then
+            echo "::error::$VERSION is not newer than the current version, $current."
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" > /dev/null; then
+            echo "::error::The tag $TAG already exists."
+            exit 1
+          fi
+          sed -i "0,/^version = \"$current\"/s//version = \"$VERSION\"/" crates/clipdeck-app/Cargo.toml
+          sed -i "/^name = \"clipdeck-app\"$/{n;s/^version = \".*\"/version = \"$VERSION\"/}" Cargo.lock
+          # Fails if the two files disagree, or if anything else in the lock file would change.
+          cargo metadata --locked --no-deps --format-version 1 > /dev/null
+          git diff --stat
+
+      - name: Write the release notes
+        id: notes
+        env:
+          NOTES: ${{ inputs.notes }}
+        run: |
+          if [ -z "$NOTES" ]; then
+            NOTES=$(gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+              -f tag_name="$TAG" -f target_commitish=main --jq .body)
+          fi
+          {
+            echo "notes<<END_OF_NOTES"
+            echo "$NOTES"
+            echo
+            echo "Install or update with the one-line commands at https://baala3.github.io/clipdeck/#install."
+            echo "Already installed? Clipdeck updates itself."
+            echo "END_OF_NOTES"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Commit, tag, and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Release $VERSION"
+          git tag "$TAG"
+          git push --atomic origin HEAD:main "$TAG"
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            rust_targets: ""
+            bundle_args: --bundles nsis
+          - name: macOS
+            os: macos-latest
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
+            bundle_args: --target universal-apple-darwin --bundles app,dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Bundle
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          # Signs the update bundles; installed copies refuse unsigned updates.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: crates/clipdeck-app
+          tauriScript: npx --yes ${{ env.TAURI_CLI }}
+          args: ${{ matrix.bundle_args }}
+          tagName: ${{ env.TAG }}
+          releaseName: Clipdeck __VERSION__
+          releaseBody: ${{ needs.prepare.outputs.notes }}
+          # Stays a draft until both platforms are uploaded; the publish job flips it.
+          releaseDraft: true
+          includeUpdaterJson: true
+
+  publish:
+    name: Publish
+    needs: build
+    if: ${{ !inputs.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the release
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+
+      - name: Check the installers now get this version
+        run: |
+          manifest="https://github.com/$GITHUB_REPOSITORY/releases/latest/download/latest.json"
+          for attempt in $(seq 1 12); do
+            live=$(curl -fsSL "$manifest" | jq -r .version || true)
+            if [ "$live" = "$VERSION" ]; then
+              echo "The one-line installers and the in-app updater now serve $VERSION."
+              exit 0
+            fi
+            echo "Still serving '$live' (attempt $attempt), waiting..."
+            sleep 10
+          done
+          echo "::error::Published $TAG, but $manifest still reports '$live'."
+          exit 1
