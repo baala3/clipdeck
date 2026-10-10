@@ -10,55 +10,58 @@
 <meta property="og:type" content="website" />
 <meta property="og:image" content="https://baala3.github.io/clipdeck/icon.png" />
 <link rel="icon" type="image/svg+xml" href="icon.svg" />
+<script>
+// Light unless the visitor chose dark; set before first paint so the page does not flash.
+try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch {}
+</script>
 <style>
   :root {
-    color-scheme: light dark;
-    --bg: #f6faf9;
+    color-scheme: light;
+    --bg: #faf8f2;
     --surface: #ffffff;
-    --sunken: #edf4f2;
-    --border: #d5e2df;
-    --text: #10211f;
-    --muted: #556b67;
-    --accent: #0b7369;
-    --accent-hover: #095e56;
-    --accent-soft: #d9f3ee;
-    --on-accent: #ffffff;
+    --sunken: #f2efe6;
+    --border: #dfdacb;
+    --text: #1c1c1e;
+    --muted: #63615a;
+    --accent: #1c1c1e;
+    --accent-hover: #3a3a3d;
+    --accent-soft: #ebe7da;
+    --on-accent: #fbf8ef;
     --amber: #b7791f;
-    --code-bg: #0f2624;
-    --code-text: #d6f5ee;
+    --code-bg: #1c1c1e;
+    --code-text: #f1eee4;
     --menu-bg: #f4f4f5;
     --menu-border: #c9c9ce;
     --menu-text: #1d1d1f;
     --menu-muted: #7b7b82;
-    --menu-hover: #0b7369;
-    --window-bar: #e6ecea;
-    --shadow: 0 1px 2px rgba(16, 33, 31, 0.06), 0 12px 32px rgba(16, 33, 31, 0.1);
+    --menu-hover: #3a3a3c;
+    --window-bar: #ece8dc;
+    --shadow: 0 1px 2px rgba(28, 28, 30, 0.06), 0 12px 32px rgba(28, 28, 30, 0.1);
     --menu-shadow: 0 2px 6px rgba(0, 0, 0, 0.12), 0 14px 36px rgba(0, 0, 0, 0.2);
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0b1514;
-      --surface: #121f1d;
-      --sunken: #0f1a19;
-      --border: #24403b;
-      --text: #e7f3f0;
-      --muted: #94aca7;
-      --accent: #2dd4bf;
-      --accent-hover: #5eead4;
-      --accent-soft: #123631;
-      --on-accent: #06221f;
-      --amber: #fbbf24;
-      --code-bg: #071110;
-      --code-text: #c9efe7;
-      --menu-bg: #2a2a2c;
-      --menu-border: #48484c;
-      --menu-text: #ececec;
-      --menu-muted: #9a9aa0;
-      --menu-hover: #0f8f82;
-      --window-bar: #1a2b28;
-      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
-      --menu-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 14px 36px rgba(0, 0, 0, 0.55);
-    }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #121213;
+    --surface: #1c1c1e;
+    --sunken: #171718;
+    --border: #333336;
+    --text: #f4f1e8;
+    --muted: #a5a299;
+    --accent: #fbf8ef;
+    --accent-hover: #ffffff;
+    --accent-soft: #2c2c2f;
+    --on-accent: #1c1c1e;
+    --amber: #fbbf24;
+    --code-bg: #0b0b0c;
+    --code-text: #e9e6dc;
+    --menu-bg: #2a2a2c;
+    --menu-border: #48484c;
+    --menu-text: #ececec;
+    --menu-muted: #9a9aa0;
+    --menu-hover: #5a5a5f;
+    --window-bar: #232325;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+    --menu-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 14px 36px rgba(0, 0, 0, 0.55);
   }
 
   * { box-sizing: border-box; }
@@ -82,11 +85,17 @@
   /* Header */
   .site-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 20px; padding-bottom: 20px; }
   .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 650; font-size: 18px; color: var(--text); text-decoration: none; }
-  .brand img { width: 32px; height: 32px; display: block; }
+  .brand img { width: 32px; height: 32px; display: block; border-radius: 7px; }
+  :root[data-theme="dark"] .brand img { box-shadow: 0 0 0 1px var(--border); }
   .site-nav { display: flex; align-items: center; gap: 22px; font-size: 15px; }
   .site-nav a { color: var(--muted); text-decoration: none; }
   .site-nav a:hover { color: var(--text); }
   @media (max-width: 560px) { .site-nav .optional { display: none; } }
+  .theme-toggle { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); cursor: pointer; }
+  .theme-toggle:hover { border-color: var(--muted); }
+  .theme-toggle svg { width: 18px; height: 18px; }
+  .theme-toggle .sun, :root[data-theme="dark"] .theme-toggle .moon { display: none; }
+  :root[data-theme="dark"] .theme-toggle .sun { display: block; }
 
   /* Buttons */
   .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600; font-size: 16px; text-decoration: none; white-space: nowrap; }
@@ -98,7 +107,7 @@
   /* Hero */
   .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 56px; align-items: center; padding-top: 48px; padding-bottom: 88px; }
   .hero h1 { font-size: clamp(38px, 5.4vw, 60px); font-weight: 720; }
-  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero h1 em { font-style: normal; color: var(--muted); }
   .lede { margin-top: 20px; font-size: 19px; color: var(--muted); max-width: 30em; }
   .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
   .fineprint { margin-top: 16px; font-size: 14px; color: var(--muted); }
@@ -216,6 +225,10 @@
     <a class="optional" href="#how">How it works</a>
     <a class="optional" href="#faq">FAQ</a>
     <a href="https://github.com/baala3/clipdeck">GitHub</a>
+    <button class="theme-toggle" type="button" aria-label="Switch to dark theme">
+      <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.500A8 8 0 0 1 9.500 4a8 8 0 1 0 10.500 10.500z"/></svg>
+      <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.900 4.900l1.400 1.400M17.700 17.700l1.400 1.400M4.900 19.100l1.400-1.400M17.700 6.300l1.400-1.400"/></svg>
+    </button>
   </nav>
 </header>
 
@@ -249,7 +262,7 @@
           <li><span>1. cargo test --workspace</span><span class="key" data-mod>Ctrl+1</span></li>
           <li class="active"><span>2. https://github.com/baala3/clip...</span><span class="key" data-mod>Ctrl+2</span></li>
           <li><span>3. Thanks to everyone who tested...</span><span class="key" data-mod>Ctrl+3</span></li>
-          <li><span>4. #0B7369</span><span class="key" data-mod>Ctrl+4</span></li>
+          <li><span>4. #1C1C1E</span><span class="key" data-mod>Ctrl+4</span></li>
           <li><span>5. (Image)</span><span class="key" data-mod>Ctrl+5</span></li>
           <li><span>11 - 20</span><span class="chev">&#9656;</span></li>
           <li class="sep"></li>
@@ -462,6 +475,21 @@ if (isMac) {
 }
 const os = isMac ? 'mac' : isWindows ? 'windows' : null;
 document.querySelector(`.card[data-os="${os}"]`)?.classList.add('suggested');
+
+// The site is light by default; the header button switches to dark and remembers it.
+const themeToggle = document.querySelector('.theme-toggle');
+const labelThemeToggle = () => {
+  const dark = document.documentElement.dataset.theme === 'dark';
+  themeToggle.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+};
+labelThemeToggle();
+themeToggle.addEventListener('click', () => {
+  const dark = document.documentElement.dataset.theme !== 'dark';
+  if (dark) document.documentElement.dataset.theme = 'dark';
+  else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem('theme', dark ? 'dark' : 'light'); } catch {}
+  labelThemeToggle();
+});
 
 document.querySelectorAll('.command button').forEach((button) => {
   button.addEventListener('click', async () => {
