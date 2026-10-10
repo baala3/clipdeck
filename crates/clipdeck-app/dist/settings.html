@@ -47,7 +47,7 @@
   h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
   section { margin-bottom: 20px; scroll-margin-top: 16px; }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 14px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 14px; min-height: 54px; }
   .row + .row { border-top: 1px solid var(--border); }
   .hint { color: var(--muted); font-size: 12px; margin: 6px 2px 0; }
   .banner { border: 1px solid var(--error-border); background: var(--error-bg); color: var(--error-text); border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; white-space: pre-wrap; }
@@ -83,7 +83,7 @@
   .unbind { border: none; background: none; color: var(--muted); padding: 4px 6px; font-size: 16px; line-height: 1; }
   .unbind:hover { color: var(--text); }
   .unbind[hidden] { display: inline-block; visibility: hidden; }
-  select { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; }
+  select { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; min-width: 148px; }
   .number { width: 80px; text-align: right; }
   .row label { flex: 1; }
 
@@ -190,6 +190,10 @@
       <select id="pin-modifier" data-field="pin_modifier"></select>
     </div>
     <div class="row">
+      <label for="show-numbers">Number the items</label>
+      <span class="switch"><input id="show-numbers" type="checkbox" role="switch" /><span></span></span>
+    </div>
+    <div class="row">
       <label for="title-length">Characters per item</label>
       <input id="title-length" class="number" type="number" data-field="menu_title_length" data-min="5" data-max="200" />
     </div>
@@ -273,6 +277,7 @@ const modifierSelects = document.querySelectorAll('select[data-field]');
 const numberInputs = document.querySelectorAll('input.number[data-field]');
 const pinnedList = document.getElementById('pinned-list');
 const launchAtLogin = document.getElementById('launch-at-login');
+const showNumbers = document.getElementById('show-numbers');
 const checkUpdatesButton = document.getElementById('check-updates');
 const updateStatus = document.getElementById('update-status');
 
@@ -317,6 +322,7 @@ function render() {
     button.hidden = !settings[button.dataset.field];
   });
   launchAtLogin.checked = settings.launch_at_login;
+  showNumbers.checked = settings.menu_show_numbers;
   modifierSelects.forEach((select) => { select.value = settings[select.dataset.field]; });
   numberInputs.forEach((input) => {
     if (document.activeElement !== input) input.value = settings[input.dataset.field];
@@ -434,6 +440,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 launchAtLogin.addEventListener('change', () => update({ launch_at_login: launchAtLogin.checked }));
+showNumbers.addEventListener('change', () => update({ menu_show_numbers: showNumbers.checked }));
 
 checkUpdatesButton.addEventListener('click', async () => {
   checkUpdatesButton.disabled = true;

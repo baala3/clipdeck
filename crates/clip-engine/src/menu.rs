@@ -5,6 +5,9 @@
 /// Only the first 10 items get a number shortcut: 1-9, then 0 for the tenth.
 const SHORTCUT_DIGITS: [char; 10] = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
 const ELLIPSIS: &str = "...";
+/// A tooltip is a glance at a Clip, not a viewer; past this it's cut short.
+const TOOLTIP_MAX_LINES: usize = 20;
+const TOOLTIP_MAX_CHARS: usize = 1000;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MenuLayout {
@@ -13,6 +16,8 @@ pub struct MenuLayout {
     /// How many items appear directly in the menu before folders start.
     pub items_inline: usize,
     pub items_per_folder: usize,
+    /// Prefix each title with its number ("1. ").
+    pub show_numbers: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -21,6 +26,8 @@ pub struct MenuItemModel {
     pub position: usize,
     pub label: String,
     pub shortcut_digit: Option<char>,
+    /// The Clip's text, shown on hover when the label doesn't show all of it.
+    pub tooltip: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -30,6 +37,16 @@ pub enum MenuEntry {
         title: String,
         items: Vec<MenuItemModel>,
     },
+}
+
+/// What hovering a row of a built menu shows, listed by row position so a
+/// platform adapter can match rows to the native menu's items.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MenuTip {
+    None,
+    Text(String),
+    /// A submenu, with a tooltip (or none) for each of its rows.
+    Folder(Vec<Option<String>>),
 }
 
 /// The first non-blank line of `text`, cut to `max_length` characters with a
@@ -47,18 +64,49 @@ pub fn menu_title(text: &str, max_length: usize) -> String {
     format!("{kept}{ELLIPSIS}")
 }
 
+/// What hovering a menu item shows: the whole Clip, or `None` when `title`
+/// (from [`menu_title`]) already shows all of it. Very long Clips are cut to a
+/// screenful.
+pub fn menu_tooltip(text: &str, title: &str) -> Option<String> {
+    let text = text.trim();
+    if text == title {
+        return None;
+    }
+    let mut lines = text.lines();
+    let mut tooltip = lines
+        .by_ref()
+        .take(TOOLTIP_MAX_LINES)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut cut = lines.next().is_some();
+    if let Some((end, _)) = tooltip.char_indices().nth(TOOLTIP_MAX_CHARS) {
+        tooltip.truncate(end);
+        cut = true;
+    }
+    if cut {
+        tooltip.truncate(tooltip.trim_end().len());
+        tooltip.push_str(ELLIPSIS);
+    }
+    Some(tooltip)
+}
+
 /// Lays out `texts` (already in display order) the way Clipy does: numbering
 /// restarts at 1 inside each folder, while number shortcuts always belong to
 /// the first ten items overall.
 pub fn layout(texts: &[String], options: &MenuLayout) -> Vec<MenuEntry> {
     let per_folder = options.items_per_folder.max(1);
-    let item = |position: usize, number: usize| MenuItemModel {
-        position,
-        label: format!(
-            "{number}. {}",
-            menu_title(&texts[position], options.title_length)
-        ),
-        shortcut_digit: SHORTCUT_DIGITS.get(position).copied(),
+    let item = |position: usize, number: usize| {
+        let title = menu_title(&texts[position], options.title_length);
+        MenuItemModel {
+            position,
+            tooltip: menu_tooltip(&texts[position], &title),
+            label: if options.show_numbers {
+                format!("{number}. {title}")
+            } else {
+                title
+            },
+            shortcut_digit: SHORTCUT_DIGITS.get(position).copied(),
+        }
     };
 
     let inline = options.items_inline.min(texts.len());
