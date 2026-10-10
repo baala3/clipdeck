@@ -1,12 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" rx="228" fill="#0B7369"/>
-  <g transform="translate(470 262)">
-    <rect x="-190" y="0" width="380" height="510" rx="30" fill="#2DD4BF" transform="rotate(-15)"/>
-    <rect x="-190" y="0" width="380" height="510" rx="30" fill="#7EE8D6" transform="rotate(-3)"/>
-    <g transform="rotate(12)">
-      <rect x="-190" y="0" width="380" height="510" rx="30" fill="#ECFDF9"/>
-      <path fill="#134E4A" fill-rule="evenodd" d="M-112 -30 H-48 V-62 A48 48 0 0 1 48 -62 V-30 H96 V30 H-112 A12 12 0 0 1 -124 18 V-18 A12 12 0 0 1 -112 -30 Z M0 -78 A16 16 0 1 0 0 -46 A16 16 0 1 0 0 -78 Z"/>
-      <path fill="#FBBF24" d="M96 -30 H112 A12 12 0 0 1 124 -18 V18 A12 12 0 0 1 112 30 H96 Z"/>
+  <defs>
+    <mask id="behind-board" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <rect x="239" y="244" width="419" height="542" rx="30" fill="#000"/>
+    </mask>
+    <mask id="behind-sheet" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <rect x="239" y="244" width="419" height="542" rx="30" fill="#000" transform="translate(36 0) rotate(7 269 756)"/>
+    </mask>
+  </defs>
+  <rect width="1024" height="1024" rx="228" fill="#1C1C1E"/>
+  <g transform="translate(512 512) scale(1.15) translate(-523 -517)">
+    <g fill="none" stroke="#FBF8EF" stroke-width="20" mask="url(#behind-board)">
+      <g mask="url(#behind-sheet)">
+        <rect x="269" y="274" width="359" height="482" rx="14" transform="translate(52 -4) rotate(14 269 756)"/>
+      </g>
+      <rect x="269" y="274" width="359" height="482" rx="14" transform="translate(36 0) rotate(7 269 756)"/>
     </g>
+    <path fill="none" stroke="#FBF8EF" stroke-width="24" d="M316 274 H283 A14 14 0 0 0 269 288 V742 A14 14 0 0 0 283 756 H614 A14 14 0 0 0 628 742 V288 A14 14 0 0 0 614 274 H570"/>
+    <path fill="#FBF8EF" fill-rule="evenodd" d="M345 232 H405 V217 A37 37 0 0 1 479 217 V232 H540 A10 10 0 0 1 550 242 V292 A10 10 0 0 1 540 302 H345 A10 10 0 0 1 335 292 V242 A10 10 0 0 1 345 232 Z M431 244 V216 A11 11 0 0 1 453 216 V244 Z"/>
   </g>
 </svg>
