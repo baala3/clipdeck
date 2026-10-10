@@ -124,6 +124,7 @@ fn main() {
             let pinned_store = SqlitePinnedStore::open(store_path(app, "clipdeck-pinned.sqlite3"));
             let current = settings_state.current().clone();
             let current_launch_at_login = current.launch_at_login;
+            let current_appearance = current.appearance;
             let engine = ClipEngine::new(store, pinned_store, current.engine_config());
             let hotkeys = Hotkeys::parse(&current)
                 .expect("SettingsState::load only keeps settings with valid hotkeys");
@@ -138,6 +139,8 @@ fn main() {
                 menu_targets: Mutex::new(MenuTargets::default()),
                 menu_open: AtomicBool::new(false),
             });
+
+            settings::apply_appearance(app.handle(), current_appearance);
 
             #[cfg(windows)]
             spawn_capture_thread(

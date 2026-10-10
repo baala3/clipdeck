@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 pub struct Settings {
     /// Start Clipdeck when the user logs in to the OS.
     pub launch_at_login: bool,
+    /// Light or dark look for the menus and the Settings Window.
+    pub appearance: Appearance,
     /// Opens the full menu (History and Pinned together). Missing from files
     /// written before it existed, where it loads unbound rather than clashing
     /// with the hotkeys those files already use.
@@ -45,6 +47,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             launch_at_login: true,
+            appearance: Appearance::System,
             main_hotkey: "CommandOrControl+Shift+V".into(),
             history_hotkey: "CommandOrControl+Alt+V".into(),
             pinned_hotkey: "CommandOrControl+Shift+B".into(),
@@ -60,6 +63,14 @@ impl Default for Settings {
             menu_show_numbers: true,
         }
     }
+}
+
+/// `System` follows the OS light/dark setting, including when it changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Appearance {
+    System,
+    Light,
+    Dark,
 }
 
 /// A modifier key held alongside a menu action. `None` means no modifier

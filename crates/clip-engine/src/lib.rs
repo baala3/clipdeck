@@ -5,7 +5,7 @@ use std::path::Path;
 pub mod menu;
 mod settings;
 mod store_path;
-pub use settings::{Settings, SettingsError, SettingsFile, ShortcutModifier};
+pub use settings::{Appearance, Settings, SettingsError, SettingsFile, ShortcutModifier};
 pub use store_path::{adopt_legacy_store, LegacyStoreError};
 
 #[derive(Debug, Clone, PartialEq)]
