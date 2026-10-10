@@ -3,7 +3,7 @@
 //! of their items is chosen.
 
 use crate::{settings, AppState};
-use clip_engine::menu::{layout, HeldModifiers, MenuEntry, MenuItemModel};
+use clip_engine::menu::{layout, HeldModifiers, MenuEntry, MenuItemModel, MenuTip};
 use clip_engine::{ClipContent, Settings, ShortcutModifier};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -95,6 +95,26 @@ struct BuiltMenu {
     /// hook, while macOS delivers it as a click on the item's accelerator.
     #[cfg(windows)]
     digits: HashMap<char, Target>,
+    /// What hovering each row shows. Only Windows can show it (see ADR-0008).
+    #[cfg_attr(not(windows), allow(dead_code))]
+    tips: Vec<MenuTip>,
+}
+
+/// Appends rows to a menu while keeping each row's tooltip at its position.
+struct Rows<'a> {
+    menu: &'a Menu<Wry>,
+    tips: Vec<MenuTip>,
+}
+
+impl Rows<'_> {
+    fn push(&mut self, item: &dyn IsMenuItem<Wry>, tip: MenuTip) -> tauri::Result<()> {
+        self.tips.push(tip);
+        self.menu.append(item)
+    }
+
+    fn plain(&mut self, item: &dyn IsMenuItem<Wry>) -> tauri::Result<()> {
+        self.push(item, MenuTip::None)
+    }
 }
 
 fn build(
@@ -104,117 +124,138 @@ fn build(
     id_prefix: &str,
 ) -> tauri::Result<BuiltMenu> {
     let menu = Menu::new(app)?;
+    let mut rows = Rows {
+        menu: &menu,
+        tips: Vec::new(),
+    };
     let mut built_targets = HashMap::new();
     #[cfg(windows)]
     let mut digits = HashMap::new();
-    let mut section =
-        |title: &str, list: List, texts: &[String], with_digits: bool| -> tauri::Result<()> {
-            menu.append(&MenuItem::with_id(
+    let mut section = |rows: &mut Rows,
+                       title: &str,
+                       list: List,
+                       texts: &[String],
+                       with_digits: bool|
+     -> tauri::Result<()> {
+        rows.plain(&MenuItem::with_id(
+            app,
+            format!("{id_prefix}label:{title}"),
+            title,
+            false,
+            None::<&str>,
+        )?)?;
+        if texts.is_empty() {
+            return rows.plain(&MenuItem::with_id(
                 app,
-                format!("{id_prefix}label:{title}"),
-                title,
+                format!("{id_prefix}empty:{title}"),
+                "(empty)",
                 false,
                 None::<&str>,
-            )?)?;
-            if texts.is_empty() {
-                menu.append(&MenuItem::with_id(
-                    app,
-                    format!("{id_prefix}empty:{title}"),
-                    "(empty)",
-                    false,
-                    None::<&str>,
-                )?)?;
-                return Ok(());
-            }
-            let number_modifier = if with_digits {
-                snap.settings.number_shortcut_modifier
-            } else {
-                ShortcutModifier::Off
-            };
-            let mut item = |model: &MenuItemModel| -> tauri::Result<MenuItem<Wry>> {
-                let id = format!("{id_prefix}{}:{}", list_code(list), model.position);
-                let target = Target {
-                    list,
-                    text: texts[model.position].clone(),
-                };
-                let accelerator = model
-                    .shortcut_digit
-                    .and_then(|digit| accelerator(number_modifier, digit));
-                #[cfg(windows)]
-                if accelerator.is_some() {
-                    digits.insert(model.shortcut_digit.unwrap(), target.clone());
-                }
-                built_targets.insert(id.clone(), target);
-                MenuItem::with_id(
-                    app,
-                    id,
-                    escape_mnemonics(&model.label),
-                    true,
-                    accelerator.as_deref(),
-                )
-            };
-            for entry in layout(texts, &snap.settings.menu_layout()) {
-                match entry {
-                    MenuEntry::Item(model) => menu.append(&item(&model)?)?,
-                    MenuEntry::Folder { title, items } => {
-                        let built: Vec<MenuItem<Wry>> =
-                            items.iter().map(&mut item).collect::<tauri::Result<_>>()?;
-                        let refs: Vec<&dyn IsMenuItem<Wry>> =
-                            built.iter().map(|i| i as &dyn IsMenuItem<Wry>).collect();
-                        menu.append(&Submenu::with_items(app, title, true, &refs)?)?;
-                    }
-                }
-            }
-            Ok(())
+            )?);
+        }
+        let number_modifier = if with_digits {
+            snap.settings.number_shortcut_modifier
+        } else {
+            ShortcutModifier::Off
         };
+        let mut item = |model: &MenuItemModel| -> tauri::Result<MenuItem<Wry>> {
+            let id = format!("{id_prefix}{}:{}", list_code(list), model.position);
+            let target = Target {
+                list,
+                text: texts[model.position].clone(),
+            };
+            let accelerator = model
+                .shortcut_digit
+                .and_then(|digit| accelerator(number_modifier, digit));
+            #[cfg(windows)]
+            if accelerator.is_some() {
+                digits.insert(model.shortcut_digit.unwrap(), target.clone());
+            }
+            built_targets.insert(id.clone(), target);
+            MenuItem::with_id(
+                app,
+                id,
+                escape_mnemonics(&model.label),
+                true,
+                accelerator.as_deref(),
+            )
+        };
+        for entry in layout(texts, &snap.settings.menu_layout()) {
+            match entry {
+                MenuEntry::Item(model) => {
+                    let tip = model.tooltip.clone().map_or(MenuTip::None, MenuTip::Text);
+                    rows.push(&item(&model)?, tip)?;
+                }
+                MenuEntry::Folder { title, items } => {
+                    let built: Vec<MenuItem<Wry>> =
+                        items.iter().map(&mut item).collect::<tauri::Result<_>>()?;
+                    let refs: Vec<&dyn IsMenuItem<Wry>> =
+                        built.iter().map(|i| i as &dyn IsMenuItem<Wry>).collect();
+                    rows.push(
+                        &Submenu::with_items(app, title, true, &refs)?,
+                        MenuTip::Folder(items.into_iter().map(|model| model.tooltip).collect()),
+                    )?;
+                }
+            }
+        }
+        Ok(())
+    };
 
     if kind != MenuKind::Pinned {
-        section("History", List::History, &snap.history, true)?;
+        section(&mut rows, "History", List::History, &snap.history, true)?;
     }
     if kind != MenuKind::History {
         if kind != MenuKind::Pinned {
-            menu.append(&PredefinedMenuItem::separator(app)?)?;
+            rows.plain(&PredefinedMenuItem::separator(app)?)?;
         }
         // Like Clipy, number shortcuts belong to History unless Pinned is shown alone.
         section(
+            &mut rows,
             "Pinned",
             List::Pinned,
             &snap.pinned,
             kind == MenuKind::Pinned,
         )?;
-        menu.append(&MenuItem::with_id(
+    }
+    // Every menu ends with the app actions, so they're reachable from any
+    // hotkey, not just the tray icon. They sit in one submenu so that opening
+    // a menu shows Clips and little else.
+    rows.plain(&PredefinedMenuItem::separator(app)?)?;
+    let more = Submenu::with_id(
+        app,
+        format!("{id_prefix}more"),
+        if snap.paused {
+            "More (capture paused)"
+        } else {
+            "More"
+        },
+        true,
+    )?;
+    if kind != MenuKind::History {
+        more.append(&MenuItem::with_id(
             app,
             NEW_PINNED,
-            "New Item...",
+            "New Pinned Item...",
             true,
             None::<&str>,
         )?)?;
     }
-    // Every menu ends with the app actions, so they're reachable from any
-    // hotkey, not just the tray icon.
-    menu.append(&PredefinedMenuItem::separator(app)?)?;
-    menu.append(&MenuItem::with_id(
-        app,
-        CLEAR_HISTORY,
-        "Clear History",
-        !snap.history.is_empty(),
-        None::<&str>,
-    )?)?;
-    menu.append(&MenuItem::with_id(
+    more.append(&MenuItem::with_id(
         app,
         EDIT_PINNED,
         "Edit Pinned...",
         true,
         None::<&str>,
     )?)?;
-    menu.append(&MenuItem::with_id(
+    more.append(&MenuItem::with_id(
         app,
-        SETTINGS,
-        "Settings...",
-        true,
+        CLEAR_HISTORY,
+        "Clear History",
+        !snap.history.is_empty(),
         None::<&str>,
     )?)?;
-    menu.append(&CheckMenuItem::with_id(
+    more.append(&PredefinedMenuItem::separator(app)?)?;
+    more.append(&CheckMenuItem::with_id(
         app,
         PAUSE,
         "Pause capture",
@@ -222,19 +263,29 @@ fn build(
         snap.paused,
         None::<&str>,
     )?)?;
-    menu.append(&PredefinedMenuItem::separator(app)?)?;
-    menu.append(&MenuItem::with_id(
+    more.append(&MenuItem::with_id(
+        app,
+        SETTINGS,
+        "Settings...",
+        true,
+        None::<&str>,
+    )?)?;
+    more.append(&PredefinedMenuItem::separator(app)?)?;
+    more.append(&MenuItem::with_id(
         app,
         QUIT,
         "Quit Clipdeck",
         true,
         None::<&str>,
     )?)?;
+    rows.plain(&more)?;
+    let tips = rows.tips;
     Ok(BuiltMenu {
         menu,
         targets: built_targets,
         #[cfg(windows)]
         digits,
+        tips,
     })
 }
 
@@ -294,12 +345,14 @@ fn show_popup(app: &AppHandle, kind: MenuKind) {
 
         #[cfg(windows)]
         {
+            register_tips(clip_windows::MenuSlot::Popup, &built.menu, built.tips);
             let hook = clip_windows::MenuKeyHook::install(snap.settings.number_shortcut_modifier);
             if let Err(err) = host.popup_menu(&built.menu) {
                 eprintln!("couldn't show the menu: {err}");
             }
             let picked = hook.as_ref().and_then(|hook| hook.picked_digit());
             drop(hook);
+            clip_windows::clear_menu_tips(clip_windows::MenuSlot::Popup);
             // Give focus back right away; a chosen item pastes into it afterwards.
             clip_windows::restore_foreground(previous);
             if let Some(target) = picked.and_then(|digit| built.digits.get(&digit)) {
@@ -323,6 +376,8 @@ pub fn refresh_tray_menu(app: &AppHandle) {
         match build(&handle, MenuKind::Main, &snap, "t:") {
             Ok(built) => {
                 handle.state::<AppState>().menu_targets.lock().unwrap().tray = built.targets;
+                #[cfg(windows)]
+                register_tips(clip_windows::MenuSlot::Tray, &built.menu, built.tips);
                 if let Some(tray) = handle.tray_by_id(TRAY_ID) {
                     let _ = tray.set_menu(Some(built.menu));
                 }
@@ -337,7 +392,19 @@ pub fn refresh_tray_menu(app: &AppHandle) {
 pub fn build_initial_tray_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let built = build(app, MenuKind::Main, &snapshot(app), "t:")?;
     app.state::<AppState>().menu_targets.lock().unwrap().tray = built.targets;
+    #[cfg(windows)]
+    register_tips(clip_windows::MenuSlot::Tray, &built.menu, built.tips);
     Ok(built.menu)
+}
+
+/// Hands a menu's tooltips to the Windows adapter, which shows them on hover.
+/// Must run on the main thread, where menus are shown.
+#[cfg(windows)]
+fn register_tips(slot: clip_windows::MenuSlot, menu: &Menu<Wry>, tips: Vec<MenuTip>) {
+    use tauri::menu::ContextMenu;
+    if let Ok(hmenu) = menu.hpopupmenu() {
+        clip_windows::set_menu_tips(slot, hmenu, tips);
+    }
 }
 
 pub fn handle_menu_event(app: &AppHandle, id: &str) {

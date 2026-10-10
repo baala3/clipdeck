@@ -27,6 +27,7 @@ fn loading_a_missing_settings_file_creates_it_with_the_defaults() {
             menu_title_length: 20,
             menu_items_inline: 10,
             menu_items_per_folder: 10,
+            menu_show_numbers: true,
         }
     );
     let written = std::fs::read_to_string(&path).unwrap();
@@ -141,6 +142,19 @@ fn a_settings_file_from_before_launch_at_login_existed_loads_with_it_on() {
 
     assert!(settings.launch_at_login);
     assert_eq!(settings.history_capacity, 50);
+}
+
+#[test]
+fn menu_numbering_is_on_unless_the_settings_file_turns_it_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = settings_path(&dir);
+    std::fs::write(&path, "history_capacity = 50\n").unwrap();
+    let settings = SettingsFile::new(&path).load().unwrap();
+    assert!(settings.menu_layout().show_numbers);
+
+    std::fs::write(&path, "menu_show_numbers = false\n").unwrap();
+    let settings = SettingsFile::new(&path).load().unwrap();
+    assert!(!settings.menu_layout().show_numbers);
 }
 
 #[test]

@@ -34,6 +34,8 @@ pub struct Settings {
     /// Items shown directly in the menu before the "11 - 20" style folders start.
     pub menu_items_inline: usize,
     pub menu_items_per_folder: usize,
+    /// Number each menu item ("1. "). Number shortcuts work either way.
+    pub menu_show_numbers: bool,
 }
 
 impl Default for Settings {
@@ -55,6 +57,7 @@ impl Default for Settings {
             menu_title_length: 20,
             menu_items_inline: 10,
             menu_items_per_folder: 10,
+            menu_show_numbers: true,
         }
     }
 }
@@ -116,6 +119,7 @@ impl Settings {
             title_length: self.menu_title_length,
             items_inline: self.menu_items_inline,
             items_per_folder: self.menu_items_per_folder,
+            show_numbers: self.menu_show_numbers,
         }
     }
 
