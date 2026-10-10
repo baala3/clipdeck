@@ -486,9 +486,11 @@ fn with_target_index(
     }
 }
 
-/// Copies the target to the clipboard, moves a History Clip to the top, and on
-/// Windows pastes into the app that was focused before the popup (ADR-0005).
-/// From the tray there's no such app (the taskbar has focus), so it only copies.
+/// Copies the target to the clipboard, moves a History Clip to the top, and
+/// pastes it (ADR-0005). Windows pastes into the app that was focused before
+/// the popup; from the tray there's no such app (the taskbar has focus), so it
+/// only copies. On macOS a menu never takes focus, so either menu pastes into
+/// the frontmost app.
 fn paste(app: &AppHandle, target: &Target, paste_into_previous: bool) {
     if let Err(err) = app.clipboard().write_text(target.text.clone()) {
         eprintln!("couldn't write the clipboard: {err}");
@@ -506,6 +508,10 @@ fn paste(app: &AppHandle, target: &Target, paste_into_previous: bool) {
     }
     #[cfg(not(windows))]
     let _ = paste_into_previous;
+    #[cfg(target_os = "macos")]
+    if !clip_macos::paste_into_frontmost_app() {
+        eprintln!("copied only: Clipdeck needs the Accessibility permission to paste");
+    }
 }
 
 /// Asks before clearing, like Clipy. The dialog blocks, so it runs off the event loop.

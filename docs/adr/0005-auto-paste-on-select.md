@@ -14,8 +14,19 @@ This has two real costs we're accepting knowingly rather than discovering later:
   Secure input fields (password boxes) and elevated/admin windows can legitimately refuse synthetic input from a non-elevated process.
   When that happens, Clipdeck silently no-ops the paste - the Clip is still on the clipboard, so a manual `Ctrl+V` still works as a fallback.
 
-macOS auto-paste is deferred.
-The equivalent there (`CGEvent` keystroke synthesis via the Accessibility API) needs the user to grant Clipdeck Accessibility permission, a materially bigger ask than anything the macOS adapter has needed so far, and it's unverifiable in this dev environment regardless (see the macOS adapter's own unverified-status note).
-Until that's built, macOS stays copy-only.
+macOS auto-paste was first deferred, and macOS shipped copy-only.
+Testing on a real Mac showed the same friction as on Windows: choosing a Clip looked like it did nothing, because the user still had to press `Cmd+V` themselves.
+So macOS now pastes too: selecting a Clip writes it to the clipboard and synthesizes `Cmd+V` (a `CGEvent` key press) into the frontmost app.
+A menu never takes focus on macOS, so there is no window to restore first, and the tray menu pastes as well as the hotkey menus.
+
+This adds costs of its own:
+
+- **It needs the Accessibility permission.**
+  macOS only lets an app send keystrokes to other apps once the user allows it under System Settings > Privacy & Security > Accessibility.
+  The first time a Clip is chosen without it, macOS shows its own prompt; until it is granted, Clipdeck stays copy-only.
+- **The grant may not survive an update.**
+  macOS ties the permission to the app's code signature, and our builds are only ad-hoc signed (ADR-0002), so a new version can look like a different app and need the permission switched off and on again.
+- **The keystroke is the key in the V position, not the letter V.**
+  On a layout that moves V (Dvorak, for example) it sends a different shortcut; the Clip is still on the clipboard.
 
 **Status**: accepted

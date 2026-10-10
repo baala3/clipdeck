@@ -7,3 +7,7 @@ pub use macos_adapter::MacClipboardSource;
 mod modifiers;
 #[cfg(target_os = "macos")]
 pub use modifiers::held_modifiers;
+#[cfg(target_os = "macos")]
+mod paste;
+#[cfg(target_os = "macos")]
+pub use paste::paste_into_frontmost_app;
