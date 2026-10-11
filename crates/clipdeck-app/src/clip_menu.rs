@@ -380,6 +380,7 @@ fn escape_mnemonics(label: &str) -> String {
 /// opened right there would deadlock as soon as any hotkey fired while it was
 /// open. So the menu is queued onto the event loop instead.
 pub fn request_popup(app: &AppHandle, kind: MenuKind) {
+    eprintln!("DEBUG hotkey");
     let app = app.clone();
     std::thread::spawn(move || {
         let handle = app.clone();
@@ -390,8 +391,10 @@ pub fn request_popup(app: &AppHandle, kind: MenuKind) {
 fn show_popup(app: &AppHandle, kind: MenuKind) {
     let state = app.state::<AppState>();
     if state.menu_open.swap(true, Ordering::SeqCst) {
+        eprintln!("DEBUG popup ignored: a menu is still open");
         return;
     }
+    eprintln!("DEBUG popup opening");
     #[cfg(windows)]
     let previous = {
         let previous = clip_windows::foreground_window();
@@ -432,6 +435,7 @@ fn show_popup(app: &AppHandle, kind: MenuKind) {
             eprintln!("couldn't show the menu: {err}");
         }
     }
+    eprintln!("DEBUG popup closed");
     state.menu_open.store(false, Ordering::SeqCst);
 }
 
