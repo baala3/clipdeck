@@ -553,8 +553,10 @@ dependencies = [
 name = "clip-engine"
 version = "0.1.0"
 dependencies = [
+ "png 0.18.1",
  "rusqlite",
  "serde",
+ "sha2",
  "tempfile",
  "toml 1.1.8+spec-1.1.0",
  "toml_edit 0.25.17+spec-1.1.0",
@@ -594,6 +596,7 @@ name = "clipdeck-app"
 version = "0.3.2"
 dependencies = [
  "auto-launch",
+ "base64 0.22.1",
  "clip-engine",
  "clip-macos",
  "clip-windows",

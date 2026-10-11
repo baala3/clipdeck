@@ -4,9 +4,11 @@
 
 use crate::{settings, AppState};
 use clip_engine::menu::{layout, HeldModifiers, MenuEntry, MenuItemModel, MenuTip};
-use clip_engine::{ClipContent, Settings, ShortcutModifier};
+use clip_engine::{ClipContent, Rgba, Settings, ShortcutModifier};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
+#[cfg(not(windows))]
+use tauri::menu::IconMenuItem;
 use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Manager, Wry};
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -37,7 +39,7 @@ enum List {
 #[derive(Clone)]
 struct Target {
     list: List,
-    text: String,
+    content: ClipContent,
 }
 
 /// Item ids of the menus that currently exist, mapped to their targets.
@@ -56,32 +58,43 @@ const QUIT: &str = "quit";
 
 /// Everything a menu shows, copied out so no lock is held while building it.
 struct Snapshot {
-    history: Vec<String>,
-    pinned: Vec<String>,
+    history: Vec<ClipContent>,
+    pinned: Vec<ClipContent>,
+    /// The thumbnail of every image Clip in either list, by digest.
+    thumbnails: HashMap<String, Rgba>,
     settings: Settings,
     paused: bool,
 }
 
 fn snapshot(app: &AppHandle) -> Snapshot {
     let state = app.state::<AppState>();
-    let texts = |clips: Vec<clip_engine::Clip>| -> Vec<String> {
-        clips
-            .into_iter()
-            .rev()
-            .filter_map(|clip| match clip.content {
-                ClipContent::Text(text) => Some(text),
-                ClipContent::Image(_) => None,
-            })
-            .collect()
+    let newest_first = |clips: Vec<clip_engine::Clip>| -> Vec<ClipContent> {
+        clips.into_iter().rev().map(|clip| clip.content).collect()
     };
-    let (history, pinned) = {
+    let (history, pinned, thumbnail_pngs) = {
         let engine = state.engine.lock().unwrap();
-        (texts(engine.history()), texts(engine.pinned()))
+        let history = newest_first(engine.history());
+        let pinned = newest_first(engine.pinned());
+        let thumbnail_pngs: HashMap<String, Vec<u8>> = history
+            .iter()
+            .chain(&pinned)
+            .filter_map(|content| match content {
+                ClipContent::Image(image) => Some(image),
+                ClipContent::Text(_) => None,
+            })
+            .filter_map(|image| Some((image.digest.clone(), engine.image_thumbnail_png(image)?)))
+            .collect();
+        (history, pinned, thumbnail_pngs)
     };
+    let thumbnails = thumbnail_pngs
+        .into_iter()
+        .filter_map(|(digest, png)| Some((digest, Rgba::from_png(&png)?)))
+        .collect();
     let settings = state.active_settings.lock().unwrap().clone();
     Snapshot {
         history,
         pinned,
+        thumbnails,
         settings,
         paused: state.paused.load(Ordering::SeqCst),
     }
@@ -98,6 +111,10 @@ struct BuiltMenu {
     /// What hovering each row shows. Only Windows can show it (see ADR-0008).
     #[cfg_attr(not(windows), allow(dead_code))]
     tips: Vec<MenuTip>,
+    /// The thumbnails of the image Clips' rows. Windows sets them on the
+    /// native menu; elsewhere each one is its item's icon already.
+    #[cfg(windows)]
+    images: Vec<clip_windows::MenuImage>,
 }
 
 /// Appends rows to a menu while keeping each row's tooltip at its position.
@@ -131,10 +148,12 @@ fn build(
     let mut built_targets = HashMap::new();
     #[cfg(windows)]
     let mut digits = HashMap::new();
+    #[cfg(windows)]
+    let mut images = Vec::new();
     let mut section = |rows: &mut Rows,
                        title: &str,
                        list: List,
-                       texts: &[String],
+                       clips: &[ClipContent],
                        with_digits: bool|
      -> tauri::Result<()> {
         rows.plain(&MenuItem::with_id(
@@ -144,7 +163,7 @@ fn build(
             false,
             None::<&str>,
         )?)?;
-        if texts.is_empty() {
+        if clips.is_empty() {
             return rows.plain(&MenuItem::with_id(
                 app,
                 format!("{id_prefix}empty:{title}"),
@@ -158,11 +177,11 @@ fn build(
         } else {
             ShortcutModifier::Off
         };
-        let mut item = |model: &MenuItemModel| -> tauri::Result<MenuItem<Wry>> {
+        let mut item = |model: &MenuItemModel| -> tauri::Result<Box<dyn IsMenuItem<Wry>>> {
             let id = format!("{id_prefix}{}:{}", list_code(list), model.position);
             let target = Target {
                 list,
-                text: texts[model.position].clone(),
+                content: clips[model.position].clone(),
             };
             let accelerator = model
                 .shortcut_digit
@@ -172,25 +191,58 @@ fn build(
                 digits.insert(model.shortcut_digit.unwrap(), target.clone());
             }
             built_targets.insert(id.clone(), target);
-            MenuItem::with_id(
+            let label = escape_mnemonics(&model.label);
+            #[cfg(not(windows))]
+            if let Some(thumbnail) = thumbnail(snap, &clips[model.position]) {
+                let icon =
+                    tauri::image::Image::new(&thumbnail.pixels, thumbnail.width, thumbnail.height);
+                return Ok(Box::new(IconMenuItem::with_id(
+                    app,
+                    id,
+                    label,
+                    true,
+                    Some(icon),
+                    accelerator.as_deref(),
+                )?));
+            }
+            Ok(Box::new(MenuItem::with_id(
                 app,
                 id,
-                escape_mnemonics(&model.label),
+                label,
                 true,
                 accelerator.as_deref(),
-            )
+            )?))
         };
-        for entry in layout(texts, &snap.settings.menu_layout()) {
+        for entry in layout(clips, &snap.settings.menu_layout()) {
+            // Rows are counted by their tooltips, one per row.
+            #[cfg(windows)]
+            let row = rows.tips.len();
+            #[cfg(windows)]
+            let mut image = |model: &MenuItemModel, folder_row: Option<usize>| {
+                if let Some(thumbnail) = thumbnail(snap, &clips[model.position]) {
+                    images.push(clip_windows::MenuImage {
+                        row,
+                        folder_row,
+                        image: thumbnail.clone(),
+                    });
+                }
+            };
             match entry {
                 MenuEntry::Item(model) => {
+                    #[cfg(windows)]
+                    image(&model, None);
                     let tip = model.tooltip.clone().map_or(MenuTip::None, MenuTip::Text);
-                    rows.push(&item(&model)?, tip)?;
+                    rows.push(item(&model)?.as_ref(), tip)?;
                 }
                 MenuEntry::Folder { title, items } => {
-                    let built: Vec<MenuItem<Wry>> =
+                    #[cfg(windows)]
+                    for (folder_row, model) in items.iter().enumerate() {
+                        image(model, Some(folder_row));
+                    }
+                    let built: Vec<Box<dyn IsMenuItem<Wry>>> =
                         items.iter().map(&mut item).collect::<tauri::Result<_>>()?;
                     let refs: Vec<&dyn IsMenuItem<Wry>> =
-                        built.iter().map(|i| i as &dyn IsMenuItem<Wry>).collect();
+                        built.iter().map(|item| item.as_ref()).collect();
                     rows.push(
                         &Submenu::with_items(app, title, true, &refs)?,
                         MenuTip::Folder(items.into_iter().map(|model| model.tooltip).collect()),
@@ -235,7 +287,7 @@ fn build(
         more.append(&MenuItem::with_id(
             app,
             NEW_PINNED,
-            "New Pinned Item...",
+            "New Pinned Item",
             true,
             None::<&str>,
         )?)?;
@@ -243,7 +295,7 @@ fn build(
     more.append(&MenuItem::with_id(
         app,
         EDIT_PINNED,
-        "Edit Pinned...",
+        "Edit Pinned",
         true,
         None::<&str>,
     )?)?;
@@ -266,7 +318,7 @@ fn build(
     more.append(&MenuItem::with_id(
         app,
         SETTINGS,
-        "Settings...",
+        "Settings",
         true,
         None::<&str>,
     )?)?;
@@ -286,7 +338,17 @@ fn build(
         #[cfg(windows)]
         digits,
         tips,
+        #[cfg(windows)]
+        images,
     })
+}
+
+/// The thumbnail to show beside `content` in a menu, if it's an image.
+fn thumbnail<'a>(snap: &'a Snapshot, content: &ClipContent) -> Option<&'a Rgba> {
+    match content {
+        ClipContent::Image(image) => snap.thumbnails.get(&image.digest),
+        ClipContent::Text(_) => None,
+    }
 }
 
 fn list_code(list: List) -> &'static str {
@@ -345,7 +407,12 @@ fn show_popup(app: &AppHandle, kind: MenuKind) {
 
         #[cfg(windows)]
         {
-            register_tips(clip_windows::MenuSlot::Popup, &built.menu, built.tips);
+            decorate(
+                clip_windows::MenuSlot::Popup,
+                &built.menu,
+                built.tips,
+                built.images,
+            );
             let hook = clip_windows::MenuKeyHook::install(snap.settings.number_shortcut_modifier);
             if let Err(err) = host.popup_menu(&built.menu) {
                 eprintln!("couldn't show the menu: {err}");
@@ -353,6 +420,7 @@ fn show_popup(app: &AppHandle, kind: MenuKind) {
             let picked = hook.as_ref().and_then(|hook| hook.picked_digit());
             drop(hook);
             clip_windows::clear_menu_tips(clip_windows::MenuSlot::Popup);
+            clip_windows::clear_menu_images(clip_windows::MenuSlot::Popup);
             // Give focus back right away; a chosen item pastes into it afterwards.
             clip_windows::restore_foreground(previous);
             if let Some(target) = picked.and_then(|digit| built.digits.get(&digit)) {
@@ -377,7 +445,12 @@ pub fn refresh_tray_menu(app: &AppHandle) {
             Ok(built) => {
                 handle.state::<AppState>().menu_targets.lock().unwrap().tray = built.targets;
                 #[cfg(windows)]
-                register_tips(clip_windows::MenuSlot::Tray, &built.menu, built.tips);
+                decorate(
+                    clip_windows::MenuSlot::Tray,
+                    &built.menu,
+                    built.tips,
+                    built.images,
+                );
                 if let Some(tray) = handle.tray_by_id(TRAY_ID) {
                     let _ = tray.set_menu(Some(built.menu));
                 }
@@ -393,17 +466,29 @@ pub fn build_initial_tray_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let built = build(app, MenuKind::Main, &snapshot(app), "t:")?;
     app.state::<AppState>().menu_targets.lock().unwrap().tray = built.targets;
     #[cfg(windows)]
-    register_tips(clip_windows::MenuSlot::Tray, &built.menu, built.tips);
+    decorate(
+        clip_windows::MenuSlot::Tray,
+        &built.menu,
+        built.tips,
+        built.images,
+    );
     Ok(built.menu)
 }
 
-/// Hands a menu's tooltips to the Windows adapter, which shows them on hover.
-/// Must run on the main thread, where menus are shown.
+/// Hands a menu's tooltips and thumbnails to the Windows adapter, which shows
+/// the tooltips on hover and draws the thumbnails in their rows. Must run on
+/// the main thread, where menus are shown.
 #[cfg(windows)]
-fn register_tips(slot: clip_windows::MenuSlot, menu: &Menu<Wry>, tips: Vec<MenuTip>) {
+fn decorate(
+    slot: clip_windows::MenuSlot,
+    menu: &Menu<Wry>,
+    tips: Vec<MenuTip>,
+    images: Vec<clip_windows::MenuImage>,
+) {
     use tauri::menu::ContextMenu;
     if let Ok(hmenu) = menu.hpopupmenu() {
         clip_windows::set_menu_tips(slot, hmenu, tips);
+        clip_windows::set_menu_images(slot, hmenu, images);
     }
 }
 
@@ -480,8 +565,7 @@ fn with_target_index(
         List::History => engine.history(),
         List::Pinned => engine.pinned(),
     };
-    let wanted = ClipContent::Text(target.text.clone());
-    if let Some(index) = clips.iter().position(|clip| clip.content == wanted) {
+    if let Some(index) = clips.iter().position(|clip| clip.content == target.content) {
         f(&mut engine, target.list, index);
     }
 }
@@ -492,7 +576,7 @@ fn with_target_index(
 /// only copies. On macOS a menu never takes focus, so either menu pastes into
 /// the frontmost app.
 fn paste(app: &AppHandle, target: &Target, paste_into_previous: bool) {
-    if let Err(err) = app.clipboard().write_text(target.text.clone()) {
+    if let Err(err) = copy(app, &target.content) {
         eprintln!("couldn't write the clipboard: {err}");
         return;
     }
@@ -512,6 +596,47 @@ fn paste(app: &AppHandle, target: &Target, paste_into_previous: bool) {
     if !clip_macos::paste_into_frontmost_app() {
         eprintln!("copied only: Clipdeck needs the Accessibility permission to paste");
     }
+}
+
+fn copy(app: &AppHandle, content: &ClipContent) -> Result<(), String> {
+    match content {
+        ClipContent::Text(text) => app
+            .clipboard()
+            .write_text(text.clone())
+            .map_err(|err| err.to_string()),
+        ClipContent::Image(image) => {
+            let png = app
+                .state::<AppState>()
+                .engine
+                .lock()
+                .unwrap()
+                .image_png(image)
+                .ok_or("the image's file is missing")?;
+            copy_png(app, &png)
+        }
+    }
+}
+
+/// macOS takes the PNG as it is (see `clip_macos::copy_png`).
+#[cfg(target_os = "macos")]
+fn copy_png(_app: &AppHandle, png: &[u8]) -> Result<(), String> {
+    clip_macos::copy_png(png)
+        .then_some(())
+        .ok_or_else(|| "the pasteboard refused the image".into())
+}
+
+/// Elsewhere the clipboard plugin takes pixels. On Windows it writes them as
+/// both a bitmap and a PNG, so apps without PNG support can paste them too.
+#[cfg(not(target_os = "macos"))]
+fn copy_png(app: &AppHandle, png: &[u8]) -> Result<(), String> {
+    let image = Rgba::from_png(png).ok_or("the image's file can't be read")?;
+    app.clipboard()
+        .write_image(&tauri::image::Image::new(
+            &image.pixels,
+            image.width,
+            image.height,
+        ))
+        .map_err(|err| err.to_string())
 }
 
 /// Asks before clearing, like Clipy. The dialog blocks, so it runs off the event loop.

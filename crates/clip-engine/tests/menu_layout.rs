@@ -1,7 +1,10 @@
 use clip_engine::menu::{layout, menu_title, menu_tooltip, MenuEntry, MenuItemModel, MenuLayout};
+use clip_engine::{ClipContent, ImageInfo};
 
-fn texts(n: usize) -> Vec<String> {
-    (1..=n).map(|i| format!("clip {i}")).collect()
+fn texts(n: usize) -> Vec<ClipContent> {
+    (1..=n)
+        .map(|i| ClipContent::Text(format!("clip {i}")))
+        .collect()
 }
 
 fn item(position: usize, label: &str, digit: Option<char>) -> MenuItemModel {
@@ -133,8 +136,8 @@ fn an_item_gets_a_tooltip_only_when_its_title_hides_part_of_the_clip() {
 
     let entries = layout(
         &[
-            "short".to_string(),
-            "a title that is too long to fit".to_string(),
+            ClipContent::Text("short".into()),
+            ClipContent::Text("a title that is too long to fit".into()),
         ],
         &MenuLayout {
             title_length: 20,
@@ -198,4 +201,30 @@ fn a_shortcut_modifier_matches_only_when_exactly_that_kind_of_key_is_held() {
     assert!(!None.is_held(ctrl));
     assert!(!Off.is_held(none));
     assert!(!Off.is_held(ctrl));
+}
+
+#[test]
+fn an_image_is_titled_by_its_size_and_has_no_tooltip() {
+    let entries = layout(
+        &[
+            ClipContent::Text("text".into()),
+            ClipContent::Image(ImageInfo {
+                digest: "abc".into(),
+                width: 1920,
+                height: 1080,
+                byte_len: 0,
+            }),
+        ],
+        &MenuLayout {
+            title_length: 5,
+            items_inline: 2,
+            items_per_folder: 10,
+            show_numbers: true,
+        },
+    );
+
+    assert_eq!(
+        entries[1],
+        MenuEntry::Item(item(1, "2. Image 1920 \u{d7} 1080", Some('2')))
+    );
 }

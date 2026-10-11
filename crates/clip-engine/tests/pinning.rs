@@ -1,5 +1,8 @@
 use clip_engine::{Clip, ClipContent, ClipEngine, ClipStore, EngineConfig, PinnedStore};
 
+mod common;
+use common::InMemoryImageStore;
+
 #[derive(Default)]
 struct InMemoryStore {
     clips: Vec<Clip>,
@@ -69,7 +72,9 @@ fn text_clip(text: &str) -> Clip {
     }
 }
 
-fn engine_with_history(clips: Vec<Clip>) -> ClipEngine<InMemoryStore, InMemoryPinnedStore> {
+fn engine_with_history(
+    clips: Vec<Clip>,
+) -> ClipEngine<InMemoryStore, InMemoryPinnedStore, InMemoryImageStore> {
     let mut store = InMemoryStore::default();
     for clip in clips {
         store.push(clip);
@@ -77,6 +82,7 @@ fn engine_with_history(clips: Vec<Clip>) -> ClipEngine<InMemoryStore, InMemoryPi
     ClipEngine::new(
         store,
         InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
         EngineConfig::default(),
     )
 }

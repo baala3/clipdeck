@@ -2,6 +2,8 @@
 //! are written, edited, and removed (Clipy's "Edit Snippets" equivalent).
 
 use crate::{clip_menu, AppState};
+use base64::prelude::{Engine as _, BASE64_STANDARD};
+use clip_engine::menu::image_title;
 use clip_engine::ClipContent;
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -10,7 +12,17 @@ use tauri::{AppHandle, State};
 pub struct PinnedItem {
     /// Chronological index in the Pinned list, which the other commands take.
     index: usize,
-    text: String,
+    /// A text item's text. An image item has `image` instead.
+    text: Option<String>,
+    image: Option<PinnedImage>,
+}
+
+#[derive(Serialize)]
+pub struct PinnedImage {
+    /// What the menus call it, e.g. "Image 640 \u{d7} 480".
+    title: String,
+    /// A `data:` URL of the thumbnail, or `None` if its file is missing.
+    thumbnail: Option<String>,
 }
 
 /// Newest first, matching the menus.
@@ -22,9 +34,22 @@ pub async fn list_pinned(state: State<'_, AppState>) -> Result<Vec<PinnedItem>, 
         .into_iter()
         .enumerate()
         .rev()
-        .filter_map(|(index, clip)| match clip.content {
-            ClipContent::Text(text) => Some(PinnedItem { index, text }),
-            ClipContent::Image(_) => None,
+        .map(|(index, clip)| match clip.content {
+            ClipContent::Text(text) => PinnedItem {
+                index,
+                text: Some(text),
+                image: None,
+            },
+            ClipContent::Image(image) => PinnedItem {
+                index,
+                text: None,
+                image: Some(PinnedImage {
+                    title: image_title(&image),
+                    thumbnail: engine.image_thumbnail_png(&image).map(|png| {
+                        format!("data:image/png;base64,{}", BASE64_STANDARD.encode(png))
+                    }),
+                }),
+            },
         })
         .collect())
 }
@@ -53,7 +78,7 @@ pub async fn edit_pinned(
     clip_menu::refresh_tray_menu(&app);
     edited
         .then_some(())
-        .ok_or_else(|| "A pinned item can't be blank.".into())
+        .ok_or_else(|| "A pinned item needs some text, and a pinned image can't be edited.".into())
 }
 
 #[tauri::command]

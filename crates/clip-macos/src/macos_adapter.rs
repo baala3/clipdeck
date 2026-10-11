@@ -13,10 +13,10 @@
 // autorelease pool (objc2's own docs say so explicitly), hence the
 // `autoreleasepool` wrapping each poll iteration below.
 
-use clip_engine::{ClipContent, ClipboardSource, IncomingClip};
+use clip_engine::{CapturedImage, ClipboardSource, IncomingClip, IncomingContent};
 use objc2::rc::autoreleasepool;
-use objc2_app_kit::{NSPasteboard, NSWorkspace};
-use objc2_foundation::ns_string;
+use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSPasteboard, NSWorkspace};
+use objc2_foundation::{ns_string, NSData, NSDictionary};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -65,18 +65,54 @@ fn poll_loop(queue: Arc<Mutex<VecDeque<IncomingClip>>>) {
             }
             last_change_count = current;
 
-            let Some(text) = read_plain_text(&pasteboard) else {
+            let concealed = is_concealed(&pasteboard);
+            let source_app = frontmost_app_name();
+            let Some(content) = read_content(&pasteboard) else {
                 return;
             };
 
-            let concealed = is_concealed(&pasteboard);
             queue.lock().unwrap().push_back(IncomingClip {
-                content: ClipContent::Text(text),
-                source_app: frontmost_app_name(),
+                content,
+                source_app,
                 concealed,
             });
         });
     }
+}
+
+/// Reads the copy as text if it has any, and as an image otherwise. A copy
+/// with both (spreadsheet cells, for one) is meant as text.
+unsafe fn read_content(pasteboard: &NSPasteboard) -> Option<IncomingContent> {
+    if let Some(text) = read_plain_text(pasteboard) {
+        return Some(IncomingContent::Text(text));
+    }
+    read_image(pasteboard).map(IncomingContent::Image)
+}
+
+/// Screenshots and most apps copy a PNG. The rest copy a TIFF, which AppKit
+/// converts.
+unsafe fn read_image(pasteboard: &NSPasteboard) -> Option<CapturedImage> {
+    if let Some(png) = pasteboard.dataForType(ns_string!("public.png")) {
+        return CapturedImage::from_png(png.bytes());
+    }
+    let tiff = pasteboard.dataForType(ns_string!("public.tiff"))?;
+    let bitmap = NSBitmapImageRep::imageRepWithData(&tiff)?;
+    let png = bitmap
+        .representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new())?;
+    CapturedImage::from_png(png.bytes())
+}
+
+/// Puts an image Clip's PNG on the clipboard. Returns whether it worked.
+///
+/// The PNG goes on as it is rather than as an `NSImage`: read back by
+/// [`read_image`] it's the very same picture, so Clipdeck's own copy moves the
+/// Clip to the top of History instead of adding a near-identical one.
+pub fn copy_png(png: &[u8]) -> bool {
+    autoreleasepool(|_| unsafe {
+        let pasteboard = NSPasteboard::generalPasteboard();
+        pasteboard.clearContents();
+        pasteboard.setData_forType(Some(&NSData::with_bytes(png)), ns_string!("public.png"))
+    })
 }
 
 unsafe fn read_plain_text(pasteboard: &NSPasteboard) -> Option<String> {

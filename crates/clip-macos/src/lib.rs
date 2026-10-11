@@ -2,7 +2,7 @@
 mod macos_adapter;
 
 #[cfg(target_os = "macos")]
-pub use macos_adapter::MacClipboardSource;
+pub use macos_adapter::{copy_png, MacClipboardSource};
 #[cfg(target_os = "macos")]
 mod modifiers;
 #[cfg(target_os = "macos")]
