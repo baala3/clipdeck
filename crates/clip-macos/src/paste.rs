@@ -13,6 +13,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// letters, so on a layout that moves V (Dvorak, say) this is another key.
 const KEY_V: CGKeyCode = 9;
 
+/// System Settings > Privacy & Security > Accessibility.
+const ACCESSIBILITY_SETTINGS: &str =
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
+
 #[link(name = "ApplicationServices", kind = "framework")]
 extern "C" {
     static kAXTrustedCheckOptionPrompt: CFStringRef;
@@ -31,6 +35,24 @@ fn accessibility_granted(prompt: bool) -> bool {
     };
     let options = CFDictionary::from_CFType_pairs(&[(key, value)]);
     unsafe { AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef()) != 0 }
+}
+
+/// Whether choosing a Clip can paste it right now. False until the user
+/// allows Clipdeck under Accessibility, and again after an update that macOS
+/// takes for a different app: the permission follows the code signature, and
+/// our builds are only ad-hoc signed (ADR-0005).
+pub fn pasting_is_allowed() -> bool {
+    accessibility_granted(false)
+}
+
+/// Takes the user to where pasting is allowed: asks macOS for its own
+/// prompt, which also puts Clipdeck in the Accessibility list, and opens that
+/// list in System Settings, since macOS shows the prompt only once.
+pub fn ask_to_allow_pasting() {
+    accessibility_granted(true);
+    let _ = std::process::Command::new("open")
+        .arg(ACCESSIBILITY_SETTINGS)
+        .spawn();
 }
 
 /// Synthesizes Cmd+V into the frontmost app, so selecting a Clip pastes it

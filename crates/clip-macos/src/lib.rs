@@ -10,4 +10,4 @@ pub use modifiers::held_modifiers;
 #[cfg(target_os = "macos")]
 mod paste;
 #[cfg(target_os = "macos")]
-pub use paste::paste_into_frontmost_app;
+pub use paste::{ask_to_allow_pasting, paste_into_frontmost_app, pasting_is_allowed};
