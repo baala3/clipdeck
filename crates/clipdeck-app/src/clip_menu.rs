@@ -55,6 +55,8 @@ const NEW_PINNED: &str = "new_pinned";
 const SETTINGS: &str = "settings";
 const PAUSE: &str = "pause";
 const QUIT: &str = "quit";
+#[cfg(target_os = "macos")]
+const ALLOW_PASTING: &str = "allow_pasting";
 
 /// Everything a menu shows, copied out so no lock is held while building it.
 struct Snapshot {
@@ -253,6 +255,20 @@ fn build(
         Ok(())
     };
 
+    // Without the Accessibility permission a chosen Clip is only copied, and
+    // macOS takes the permission away again when an update looks like a
+    // different app (ADR-0005). Say so, or pasting just seems broken.
+    #[cfg(target_os = "macos")]
+    if !clip_macos::pasting_is_allowed() {
+        rows.plain(&MenuItem::with_id(
+            app,
+            ALLOW_PASTING,
+            "Pasting is off. Allow it in Accessibility settings",
+            true,
+            None::<&str>,
+        )?)?;
+        rows.plain(&PredefinedMenuItem::separator(app)?)?;
+    }
     if kind != MenuKind::Pinned {
         section(&mut rows, "History", List::History, &snap.history, true)?;
     }
@@ -505,6 +521,8 @@ pub fn handle_menu_event(app: &AppHandle, id: &str) {
             refresh_tray_menu(app);
         }
         QUIT => app.exit(0),
+        #[cfg(target_os = "macos")]
+        ALLOW_PASTING => clip_macos::ask_to_allow_pasting(),
         _ => {
             let (from_tray, target) = {
                 let state = app.state::<AppState>();

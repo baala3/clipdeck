@@ -26,6 +26,7 @@ This adds costs of its own:
   The first time a Clip is chosen without it, macOS shows its own prompt; until it is granted, Clipdeck stays copy-only.
 - **The grant may not survive an update.**
   macOS ties the permission to the app's code signature, and our builds are only ad-hoc signed (ADR-0002), so a new version can look like a different app and need the permission switched off and on again.
+  Because the paste then fails without a word, every menu opens with a "Pasting is off. Allow it in Accessibility settings" row while the permission is missing; choosing it opens that list in System Settings.
 - **The keystroke is the key in the V position, not the letter V.**
   On a layout that moves V (Dvorak, for example) it sends a different shortcut; the Clip is still on the clipboard.
 

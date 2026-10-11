@@ -58,6 +58,7 @@ Choosing a Clip pastes it into the app you're working in, which macOS only allow
 The first time you choose a Clip, macOS asks for it: open System Settings > Privacy & Security > Accessibility and switch Clipdeck on.
 Until then, choosing a Clip only copies it, and you paste with Cmd+V yourself.
 If pasting stops working after an update, switch Clipdeck off and on again in that list (or remove it with the "-" button and add it back).
+Whenever the permission is missing, the top of Clipdeck's menu says "Pasting is off. Allow it in Accessibility settings"; choosing that row opens the list.
 Settings, History, and Pinned items are kept in `~/Library/Application Support/dev.clipdeck.app`.
 
 To uninstall, quit Clipdeck from its menu bar icon, drag it from Applications to the Trash, and delete `~/Library/Application Support/dev.clipdeck.app` and `~/Library/LaunchAgents/Clipdeck.plist`.
