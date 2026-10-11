@@ -10,124 +10,455 @@
 <meta property="og:type" content="website" />
 <meta property="og:image" content="https://baala3.github.io/clipdeck/icon.png" />
 <link rel="icon" type="image/svg+xml" href="icon.svg" />
+<link rel="preload" href="fonts/funnel-display.woff2" as="font" type="font/woff2" crossorigin />
 <script>
-// Light unless the visitor chose dark; set before first paint so the page does not flash.
-try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch {}
+// Light unless the visitor chose dark or dim; set before first paint so the page does not flash.
+try {
+  const theme = localStorage.getItem('theme');
+  if (theme === 'dark' || theme === 'dim') document.documentElement.dataset.theme = theme;
+} catch {}
+// Sections fade in as they scroll into view, unless the visitor asked for less motion.
+if (!matchMedia('(prefers-reduced-motion: reduce)').matches) document.documentElement.classList.add('mo');
 </script>
 <style>
+  @font-face { font-family: "Funnel Display"; font-style: normal; font-weight: 300 800; font-display: swap; src: url(fonts/funnel-display.woff2) format("woff2"); }
+  @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400 700; font-display: swap; src: url(fonts/jetbrains-mono.woff2) format("woff2"); }
+
+  /* Liquid glass: every surface is a pane of tinted glass over a soft field of colour.
+     A theme swaps the glass, its reflections and the accent together. */
   :root {
     color-scheme: light;
-    --bg: #faf8f2;
-    --surface: #ffffff;
-    --sunken: #f2efe6;
-    --border: #dfdacb;
-    --text: #1c1c1e;
-    --muted: #63615a;
-    --accent: #1c1c1e;
-    --accent-hover: #3a3a3d;
-    --accent-soft: #ebe7da;
-    --on-accent: #fbf8ef;
-    --amber: #b7791f;
-    --code-bg: #1c1c1e;
-    --code-text: #f1eee4;
+    --c-glass: #bec8e4;
+    --c-light: #ffffff;
+    --c-dark: #1b2138;
+    --c-content: #2c3557;
+    --c-action: #6d5dfc;
+    --c-on-action: #ffffff;
+    --c-bg: #e4ebf5;
+    --reflex-dark: 1;
+    --reflex-light: 1;
+    --saturation: 150%;
+    --orb-1: #8abdff;
+    --orb-2: #a99ffd;
+    --orb-3: #c8d0e7;
+    --orb-4: #9baacf;
+    --smoke: color-mix(in srgb, #1b2138 82%, transparent);
     --menu-bg: #f4f4f5;
     --menu-border: #c9c9ce;
     --menu-text: #1d1d1f;
     --menu-muted: #7b7b82;
     --menu-hover: #3a3a3c;
-    --window-bar: #ece8dc;
-    --shadow: 0 1px 2px rgba(28, 28, 30, 0.06), 0 12px 32px rgba(28, 28, 30, 0.1);
-    --menu-shadow: 0 2px 6px rgba(0, 0, 0, 0.12), 0 14px 36px rgba(0, 0, 0, 0.2);
+
+    --text-muted: color-mix(in srgb, var(--c-content) 74%, var(--c-bg));
+    --hairline: color-mix(in srgb, var(--c-content) 12%, transparent);
+    --glass-fill: color-mix(in srgb, var(--c-glass) 12%, transparent);
+    --glass-fill-strong: color-mix(in srgb, var(--c-glass) 36%, transparent);
+    --glass-blur: blur(8px) saturate(var(--saturation));
+    --glass-blur-lg: blur(14px) saturate(var(--saturation));
+    --glass-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--c-light) calc(var(--reflex-light) * 10%), transparent),
+      inset 1.8px 3px 0 -2px color-mix(in srgb, var(--c-light) calc(var(--reflex-light) * 90%), transparent),
+      inset -2px -2px 0 -2px color-mix(in srgb, var(--c-light) calc(var(--reflex-light) * 80%), transparent),
+      inset -3px -8px 1px -6px color-mix(in srgb, var(--c-light) calc(var(--reflex-light) * 60%), transparent),
+      inset -0.3px -1px 4px 0 color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 12%), transparent),
+      inset -1.5px 2.5px 0 -2px color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 20%), transparent),
+      inset 0 3px 4px -2px color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 20%), transparent),
+      inset 2px -6.5px 1px -4px color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 10%), transparent),
+      0 1px 5px 0 color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 10%), transparent),
+      0 6px 16px 0 color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 8%), transparent);
+    /* The same pane lifted off the page, for hover. */
+    --glass-lift:
+      inset 0 0 0 1px color-mix(in srgb, var(--c-light) calc(var(--reflex-light) * 14%), transparent),
+      inset 1.8px 3px 0 -2px color-mix(in srgb, var(--c-light) calc(var(--reflex-light) * 100%), transparent),
+      inset -2px -2px 0 -2px color-mix(in srgb, var(--c-light) calc(var(--reflex-light) * 90%), transparent),
+      inset -3px -8px 1px -6px color-mix(in srgb, var(--c-light) calc(var(--reflex-light) * 70%), transparent),
+      inset -0.3px -1px 4px 0 color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 10%), transparent),
+      inset -1.5px 2.5px 0 -2px color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 16%), transparent),
+      inset 0 3px 4px -2px color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 14%), transparent),
+      inset 2px -6.5px 1px -4px color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 8%), transparent),
+      0 4px 10px 0 color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 12%), transparent),
+      0 18px 36px 0 color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 12%), transparent);
+    /* Pressed in: highlights dimmed, shading from above, no lift. */
+    --glass-well:
+      inset 0 0 0 1px color-mix(in srgb, var(--c-light) calc(var(--reflex-light) * 10%), transparent),
+      inset -2px -2px 0 -2px color-mix(in srgb, var(--c-light) calc(var(--reflex-light) * 70%), transparent),
+      inset 0 2px 8px 0 color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 16%), transparent),
+      inset -1.5px 3.5px 1px -2px color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 22%), transparent);
+    /* Smaller pieces: chips, icon tiles, the switcher thumb. */
+    --glass-shadow-sm:
+      inset 0 0 0 1px color-mix(in srgb, var(--c-light) calc(var(--reflex-light) * 10%), transparent),
+      inset 2px 1px 0 -1px color-mix(in srgb, var(--c-light) calc(var(--reflex-light) * 90%), transparent),
+      inset -1.5px -1px 0 -1px color-mix(in srgb, var(--c-light) calc(var(--reflex-light) * 80%), transparent),
+      inset -2px -6px 1px -5px color-mix(in srgb, var(--c-light) calc(var(--reflex-light) * 60%), transparent),
+      inset -1px 2px 3px -1px color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 20%), transparent),
+      inset 0 -4px 1px -2px color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 10%), transparent),
+      0 3px 6px 0 color-mix(in srgb, var(--c-dark) calc(var(--reflex-dark) * 8%), transparent);
+
+    /* Dark terminal cards keep one face in every theme; only their accent follows it. */
+    --card-bg: #0e1324;
+    --card-border: #1f2937;
+    --card-text: #f3f4f6;
+    --card-muted: #9ca3af;
+    --card-accent: #a99ffd;
+
+    --display: "Funnel Display", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --theme-ease: cubic-bezier(1, 0, 0.4, 1);
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
-    --bg: #121213;
-    --surface: #1c1c1e;
-    --sunken: #171718;
-    --border: #333336;
-    --text: #f4f1e8;
-    --muted: #a5a299;
-    --accent: #fbf8ef;
-    --accent-hover: #ffffff;
-    --accent-soft: #2c2c2f;
-    --on-accent: #1c1c1e;
-    --amber: #fbbf24;
-    --code-bg: #0b0b0c;
-    --code-text: #e9e6dc;
+    --c-glass: #9baacf;
+    --c-light: #e4ebf5;
+    --c-dark: #0b0e1a;
+    --c-content: #e4ebf5;
+    --c-action: #8abdff;
+    --c-on-action: #1b2138;
+    --c-bg: #1b2138;
+    --reflex-dark: 2;
+    --reflex-light: 0.3;
+    --orb-1: #5b0eeb;
+    --orb-2: #6d5dfc;
+    --orb-3: #232a45;
+    --orb-4: #3d6fb8;
+    --smoke: color-mix(in srgb, #0b0e1a 60%, transparent);
+    --card-accent: #8abdff;
+  }
+  :root[data-theme="dim"] {
+    color-scheme: dark;
+    --c-glass: #9baacf;
+    --c-light: #8abdff;
+    --c-dark: #0b0e1a;
+    --c-content: #c8d0e7;
+    --c-action: #8f83ff;
+    --c-on-action: #ffffff;
+    --c-bg: #171c2e;
+    --reflex-dark: 2;
+    --reflex-light: 0.7;
+    --orb-1: #6d5dfc;
+    --orb-2: #5b0eeb;
+    --orb-3: #3b3f8f;
+    --orb-4: #232a45;
+    --smoke: color-mix(in srgb, #0b0e1a 62%, transparent);
+  }
+  :root[data-theme="dark"], :root[data-theme="dim"] {
+    --orb-opacity: 0.5;
     --menu-bg: #2a2a2c;
     --menu-border: #48484c;
     --menu-text: #ececec;
     --menu-muted: #9a9aa0;
     --menu-hover: #5a5a5f;
-    --window-bar: #232325;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
-    --menu-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 14px 36px rgba(0, 0, 0, 0.55);
   }
 
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
+  html { scroll-behavior: smooth; scroll-padding-top: 104px; }
   @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
   body {
     margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--c-bg);
+    color: var(--c-content);
+    font: 400 17px/1.6 var(--display);
+    letter-spacing: -0.005em;
     -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
+    transition: background-color 400ms var(--theme-ease), color 400ms var(--theme-ease);
   }
-  a { color: var(--accent); text-underline-offset: 3px; }
-  a:hover { color: var(--accent-hover); }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
-  h1, h2, h3 { line-height: 1.15; margin: 0; letter-spacing: -0.02em; text-wrap: balance; }
-  p { margin: 0; }
-  code, kbd, pre { font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; }
-  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  a { color: inherit; text-underline-offset: 3px; }
+  :focus-visible { outline: 2px solid var(--c-action); outline-offset: 3px; border-radius: 6px; }
+  h1, h2, h3, h4, p { margin: 0; }
+  h1, h2 { font-weight: 800; letter-spacing: -0.045em; line-height: 1.02; text-wrap: balance; font-synthesis: none; }
+  h1 em, h2 em { font-style: normal; color: var(--text-muted); }
+  h3 { font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; }
+  code, kbd, pre { font-family: var(--mono); }
+  .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(100%); white-space: nowrap; }
 
-  /* Header */
-  .site-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 20px; padding-bottom: 20px; }
-  .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 650; font-size: 18px; color: var(--text); text-decoration: none; }
-  .brand img { width: 32px; height: 32px; display: block; border-radius: 7px; }
-  :root[data-theme="dark"] .brand img { box-shadow: 0 0 0 1px var(--border); }
-  .site-nav { display: flex; align-items: center; gap: 22px; font-size: 15px; }
-  .site-nav a { color: var(--muted); text-decoration: none; }
-  .site-nav a:hover { color: var(--text); }
-  @media (max-width: 560px) { .site-nav .optional { display: none; } }
-  .theme-toggle { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); cursor: pointer; }
-  .theme-toggle:hover { border-color: var(--muted); }
-  .theme-toggle svg { width: 18px; height: 18px; }
-  .theme-toggle .sun, :root[data-theme="dark"] .theme-toggle .moon { display: none; }
-  :root[data-theme="dark"] .theme-toggle .sun { display: block; }
+  /* The field of colour the glass sits on */
+  .ambient { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+  .ambient i { position: absolute; border-radius: 50%; filter: blur(70px); opacity: var(--orb-opacity, 0.8); transition: background-color 400ms var(--theme-ease), opacity 400ms var(--theme-ease); }
+  .ambient i:nth-child(1) { width: 52vw; height: 52vw; top: -16vw; left: -12vw; background-color: var(--orb-1); }
+  .ambient i:nth-child(2) { width: 44vw; height: 44vw; top: 18vh; right: -14vw; background-color: var(--orb-2); }
+  .ambient i:nth-child(3) { width: 58vw; height: 40vw; bottom: -18vw; left: 18vw; background-color: var(--orb-3); }
+  .ambient i:nth-child(4) { width: 30vw; height: 30vw; top: 52vh; left: -8vw; background-color: var(--orb-4); opacity: calc(var(--orb-opacity, 0.8) * 0.7); }
+  .ambient::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(color-mix(in srgb, var(--c-content) 14%, transparent) 1px, transparent 1.4px);
+    background-size: 22px 22px;
+    -webkit-mask-image: linear-gradient(180deg, #000, transparent 70%);
+    mask-image: linear-gradient(180deg, #000, transparent 70%);
+  }
+
+  /* Glass panes */
+  .pane {
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: var(--glass-blur-lg);
+    backdrop-filter: var(--glass-blur-lg);
+    box-shadow: var(--glass-shadow);
+    transition: background-color 400ms var(--theme-ease), box-shadow 400ms var(--theme-ease), translate 0.5s var(--ease);
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 99em;
+    font: 500 12px/1.3 var(--mono);
+    background: var(--glass-fill);
+    box-shadow: var(--glass-shadow-sm);
+    white-space: nowrap;
+  }
+  .kicker { font: 500 11px/1.3 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); }
+  .icon-tile {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    flex: none;
+    border-radius: 16px;
+    color: #fff;
+    background: var(--smoke);
+    box-shadow: var(--glass-shadow-sm);
+  }
+  .icon-tile.accent { background: color-mix(in srgb, var(--c-action) 84%, transparent); color: var(--c-on-action); }
+  .icon-tile svg { width: 24px; height: 24px; }
+  kbd {
+    display: inline-block;
+    font-size: 0.74em;
+    font-weight: 500;
+    line-height: 1;
+    padding: 5px 7px;
+    border-radius: 7px;
+    background: var(--glass-fill-strong);
+    box-shadow: var(--glass-shadow-sm);
+    color: var(--c-content);
+    white-space: nowrap;
+  }
+
+  /* Dark terminal cards: a navy face, a grid that fades downward and an accent glow in the corner */
+  .dcard {
+    position: relative;
+    isolation: isolate;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.2);
+    color: var(--card-text);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+  }
+  .card-fx { position: absolute; inset: 0; z-index: -1; border-radius: inherit; overflow: hidden; pointer-events: none; }
+  .card-grid {
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 30px 30px;
+    -webkit-mask-image: linear-gradient(to bottom, #000 40%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 40%, transparent 100%);
+    opacity: 0.5;
+    transition: opacity 0.5s ease;
+  }
+  .card-glow {
+    position: absolute;
+    top: -50px;
+    right: -50px;
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in srgb, var(--c-action) 38%, transparent) 0%, transparent 70%);
+    filter: blur(40px);
+    transition: transform 0.5s ease;
+  }
+  .dcard.lifts:hover {
+    transform: translateY(-4px) scale(1.01);
+    border-color: color-mix(in srgb, var(--c-action) 55%, transparent);
+    box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.4), 0 0 0 1px color-mix(in srgb, var(--c-action) 30%, transparent);
+  }
+  .dcard.lifts:hover .card-grid { opacity: 0.8; animation: grid-move 20s linear infinite; }
+  .dcard.lifts:hover .card-glow { transform: scale(1.5); }
+  @keyframes grid-move { to { background-position: 30px 30px; } }
+  @keyframes blink { 50% { opacity: 0; } }
+  .dcard kbd { background: rgba(255, 255, 255, 0.07); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), inset 0 -2px 0 rgba(0, 0, 0, 0.35); color: var(--card-text); }
+  .tag {
+    display: inline-block;
+    padding: 4px 9px;
+    border-radius: 6px;
+    font: 500 11px/1.3 var(--mono);
+    color: var(--card-accent);
+    background: color-mix(in srgb, var(--c-action) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--c-action) 28%, transparent);
+    white-space: nowrap;
+  }
 
   /* Buttons */
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600; font-size: 16px; text-decoration: none; white-space: nowrap; }
-  .btn:hover { color: var(--text); border-color: var(--muted); }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-  .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--on-accent); }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    height: 50px;
+    padding: 0 22px;
+    border-radius: 99em;
+    font: 600 16px/1 var(--display);
+    text-decoration: none;
+    white-space: nowrap;
+    color: var(--c-content);
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-shadow);
+    transition: background-color 400ms var(--theme-ease), box-shadow 400ms var(--theme-ease), color 160ms, scale 0.2s;
+  }
+  .btn:hover { color: var(--c-action); background: var(--glass-fill-strong); }
+  .btn:active { scale: 0.97; box-shadow: var(--glass-well); }
+  .btn.primary { color: var(--c-on-action); background: color-mix(in srgb, var(--c-action) 86%, transparent); }
+  .btn.primary:hover { color: var(--c-on-action); background: var(--c-action); }
+  .btn.small { height: 44px; padding: 0 20px; font-size: 14.5px; box-shadow: var(--glass-shadow-sm); }
   .btn svg { width: 18px; height: 18px; flex: none; }
 
+  /* Header: one floating glass pill */
+  .site-nav {
+    position: fixed;
+    z-index: 100;
+    top: 14px;
+    left: 50%;
+    translate: -50% 0;
+    width: min(1180px, calc(100% - 32px));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 8px 8px 16px;
+    border-radius: 99em;
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: var(--glass-blur-lg);
+    backdrop-filter: var(--glass-blur-lg);
+    box-shadow: var(--glass-shadow);
+    transition: width 0.6s var(--ease), background-color 400ms var(--theme-ease), box-shadow 400ms var(--theme-ease);
+  }
+  .site-nav.scrolled { width: min(980px, calc(100% - 32px)); background: color-mix(in srgb, var(--c-glass) 22%, transparent); }
+  .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; letter-spacing: -0.02em; text-decoration: none; }
+  .brand img { width: 30px; height: 30px; display: block; border-radius: 8px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12); }
+  .nav-links { display: flex; align-items: center; gap: 2px; font-size: 14.5px; font-weight: 500; }
+  .nav-links a { padding: 10px 14px; border-radius: 99em; text-decoration: none; transition: color 160ms, background-color 300ms; }
+  .nav-links a:hover { color: var(--c-action); background: var(--glass-fill); }
+  .nav-actions { display: flex; align-items: center; gap: 8px; }
+  @media (max-width: 900px) { .nav-links { display: none; } }
+  @media (max-width: 520px) { .site-nav .btn { display: none; } .site-nav { padding-right: 8px; } }
+
+  /* Theme switcher: three options and a glass thumb that slides between them */
+  .switcher {
+    position: relative;
+    z-index: 0;
+    display: flex;
+    margin: 0;
+    padding: 4px;
+    border: 0;
+    border-radius: 99em;
+    background: color-mix(in srgb, var(--c-glass) 16%, transparent);
+    box-shadow: var(--glass-well);
+  }
+  .switcher label { display: grid; place-items: center; width: 40px; height: 36px; border-radius: 99em; cursor: pointer; color: var(--c-content); transition: color 160ms; }
+  .switcher label:hover { color: var(--c-action); }
+  .switcher label:has(input:checked) { color: var(--c-content); cursor: default; }
+  .switcher label:has(input:focus-visible) { outline: 2px solid var(--c-action); outline-offset: -3px; }
+  .switcher input { position: absolute; opacity: 0; pointer-events: none; }
+  .switcher svg { width: 18px; height: 18px; transition: scale 200ms var(--ease); }
+  .switcher label:hover svg { scale: 1.15; }
+  .switcher label:has(input:checked) svg { scale: 1; }
+  .switcher::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    left: 4px;
+    top: 4px;
+    width: 40px;
+    height: 36px;
+    border-radius: 99em;
+    background: var(--glass-fill-strong);
+    box-shadow: var(--glass-shadow-sm);
+    transition: translate 400ms var(--theme-ease), background-color 400ms var(--theme-ease), box-shadow 400ms var(--theme-ease);
+  }
+  .switcher:has(input[value="dark"]:checked)::after { translate: 40px 0; }
+  .switcher:has(input[value="dim"]:checked)::after { translate: 80px 0; }
+
   /* Hero */
-  .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 56px; align-items: center; padding-top: 48px; padding-bottom: 88px; }
-  .hero h1 { font-size: clamp(38px, 5.4vw, 60px); font-weight: 720; }
-  .hero h1 em { font-style: normal; color: var(--muted); }
-  .lede { margin-top: 20px; font-size: 19px; color: var(--muted); max-width: 30em; }
-  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
-  .fineprint { margin-top: 16px; font-size: 14px; color: var(--muted); }
-  @media (max-width: 900px) {
-    .hero { grid-template-columns: minmax(0, 1fr); gap: 44px; padding-top: 28px; padding-bottom: 64px; }
+  .hero { position: relative; min-height: 100vh; display: flex; align-items: center; padding: 136px 48px 104px; overflow: hidden; }
+  .hero-grid {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    gap: clamp(32px, 4vw, 72px);
+    align-items: center;
+  }
+  .hero h1 { font-size: clamp(44px, 5.4vw, 84px); line-height: 1; }
+  .lede { margin-top: 24px; max-width: 30em; font-size: clamp(17px, 1.3vw, 19px); line-height: 1.55; color: var(--text-muted); }
+  .cta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; }
+  .points { display: flex; margin: 44px 0 0; padding: 0; list-style: none; }
+  .points li { display: flex; align-items: center; gap: 12px; padding: 0 20px; border-left: 1px solid var(--hairline); }
+  .points li:first-child { padding-left: 0; border-left: 0; }
+  .points svg { width: 26px; height: 26px; flex: none; color: var(--c-action); }
+  .points span { display: grid; gap: 2px; font-size: 13px; line-height: 1.35; color: var(--text-muted); }
+  .points strong { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; color: var(--c-content); white-space: nowrap; }
+  .wordmark {
+    position: absolute;
+    z-index: 1;
+    left: 50%;
+    bottom: -5vw;
+    translate: -50% 0;
+    font-size: 21vw;
+    font-weight: 800;
+    line-height: 0.8;
+    letter-spacing: -0.06em;
+    white-space: nowrap;
+    color: transparent;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--c-light) calc(var(--reflex-light) * 55%), transparent) 0%, transparent 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    opacity: 0.55;
+    pointer-events: none;
+    user-select: none;
+  }
+  @media (max-width: 1240px) {
+    .points li { padding: 0 14px; }
+  }
+  @media (max-width: 1040px) {
+    .hero { min-height: 0; padding: 128px 24px 88px; }
+    .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 56px; }
+    .scene { max-width: 720px; }
+  }
+  @media (max-width: 640px) {
+    .hero { padding: 116px 20px 72px; }
+    .hero h1 { font-size: clamp(40px, 11.4vw, 60px); }
+    .points { flex-direction: column; gap: 14px; margin-top: 34px; }
+    .points li { padding: 0; border-left: 0; }
   }
 
   /* Illustration: an editor window with the Clipdeck menu open over it */
-  .scene { position: relative; padding-bottom: 112px; }
-  .window { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
-  .window-bar { display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; background: var(--window-bar); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted); }
-  .window-bar i { width: 11px; height: 11px; border-radius: 50%; background: var(--border); }
+  .scene { position: relative; container-type: inline-size; padding-bottom: 150px; }
+  .scene-glow {
+    position: absolute;
+    left: -4%;
+    top: -18%;
+    width: 108%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in srgb, var(--c-action) 26%, transparent) 0%, color-mix(in srgb, var(--c-action) 10%, transparent) 46%, transparent 68%);
+    pointer-events: none;
+  }
+  .window-bar { display: flex; align-items: center; gap: 7px; height: 42px; padding: 0 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); font: 12px/1 var(--mono); color: var(--card-muted); }
+  .window-bar i { width: 9px; height: 9px; border-radius: 50%; background: #3a4363; }
+  .window-bar i:first-child { background: var(--c-action); box-shadow: 0 0 8px var(--c-action); }
   .window-bar span { margin-left: 8px; }
-  .doc { padding: 22px 24px 120px; font-size: 14px; line-height: 1.75; color: var(--muted); }
-  .doc b { display: block; color: var(--text); font-size: 16px; margin-bottom: 6px; }
-  .doc .caret { display: inline-block; width: 2px; height: 1.1em; margin-left: 1px; background: var(--accent); vertical-align: text-bottom; animation: blink 1.1s steps(1) infinite; }
-  @keyframes blink { 50% { opacity: 0; } }
+  .doc { padding: 24px 26px 150px; font: 13.5px/1.8 var(--mono); color: var(--card-muted); }
+  .doc b { display: block; margin-bottom: 8px; font: 700 20px/1.2 var(--display); letter-spacing: -0.025em; color: var(--card-text); }
+  .doc .caret { display: inline-block; width: 2px; height: 1.15em; margin-left: 2px; background: var(--c-action); box-shadow: 0 0 8px var(--c-action); vertical-align: text-bottom; animation: blink 1.1s steps(1) infinite; }
   @media (prefers-reduced-motion: reduce) { .doc .caret { animation: none; } }
 
-  .menu { background: var(--menu-bg); border: 1px solid var(--menu-border); border-radius: 8px; box-shadow: var(--menu-shadow); padding: 5px; font: 13px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--menu-text); width: 268px; }
+  .menu { background: var(--menu-bg); border: 1px solid var(--menu-border); border-radius: 8px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16), 0 18px 44px rgba(0, 0, 0, 0.34); padding: 5px; font: 13px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: 0; color: var(--menu-text); width: 268px; }
   .menu ul { list-style: none; margin: 0; padding: 0; }
   .menu li { display: flex; align-items: center; gap: 12px; padding: 5px 10px; border-radius: 5px; white-space: nowrap; }
   .menu li > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -136,114 +467,242 @@ try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dat
   .menu .key, .menu .chev { color: var(--menu-muted); font-size: 12px; flex: none; }
   .menu .active { background: var(--menu-hover); color: #fff; }
   .menu .active .key { color: rgba(255, 255, 255, 0.8); }
-  .scene .menu { position: absolute; left: 34%; top: 132px; }
-  .scene .cursor { position: absolute; left: calc(34% + 150px); top: 206px; width: 20px; height: 20px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4)); }
-  @media (max-width: 480px) {
+  .scene .menu { position: absolute; z-index: 3; left: 38%; top: 124px; }
+  .scene .cursor { position: absolute; z-index: 4; left: calc(38% + 150px); top: 198px; width: 20px; height: 20px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4)); }
+  .hotkey { position: absolute; z-index: 2; left: 0; bottom: 18px; display: grid; gap: 10px; padding: 16px 18px; border-radius: 16px; }
+  .hotkey .kicker { color: var(--card-muted); }
+  .hotkey .keys { display: flex; gap: 5px; font-size: 17px; }
+  @container (max-width: 540px) { .hotkey { display: none; } }
+  @container (max-width: 440px) {
     .scene .menu { left: auto; right: 0; }
     .scene .cursor { left: auto; right: 96px; }
   }
 
   /* Sections */
-  section { padding: 80px 0; }
-  .band { background: var(--sunken); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-  .eyebrow { font-size: 13px; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
-  h2 { font-size: clamp(28px, 3.4vw, 38px); font-weight: 700; }
-  .section-lede { margin-top: 14px; color: var(--muted); max-width: 38em; }
+  section { position: relative; padding: 112px 48px; }
+  .inner { width: 100%; max-width: 1200px; margin: 0 auto; }
+  .section-head { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px 64px; align-items: end; margin-bottom: 56px; }
+  h2 { font-size: clamp(34px, 4.2vw, 60px); }
+  .section-sub { max-width: 30em; font-size: 17px; line-height: 1.6; color: var(--text-muted); }
+  @media (max-width: 1040px) { section { padding: 88px 24px; } }
+  @media (max-width: 900px) { .section-head { grid-template-columns: minmax(0, 1fr); margin-bottom: 44px; } }
+  @media (max-width: 640px) { section { padding: 72px 20px; } }
 
-  .features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 44px; padding: 0; list-style: none; }
-  .features li { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
-  .features .icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); margin-bottom: 16px; }
-  .features .icon svg { width: 21px; height: 21px; }
-  .features h3 { font-size: 18px; font-weight: 650; letter-spacing: -0.01em; margin-bottom: 8px; }
-  .features p { font-size: 15.5px; color: var(--muted); }
-  @media (max-width: 900px) { .features { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  @media (max-width: 600px) { .features { grid-template-columns: minmax(0, 1fr); } }
+  /* Features */
+  .features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin: 0; padding: 0; list-style: none; }
+  .features li { display: flex; flex-direction: column; gap: 12px; padding: 26px; border-radius: 28px; }
+  .features li:hover { translate: 0 -6px; box-shadow: var(--glass-lift); }
+  .feature-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .features h3 { font-size: 22px; }
+  .features p { font-size: 15.5px; color: var(--text-muted); }
+  @media (max-width: 960px) { .features { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 620px) { .features { grid-template-columns: minmax(0, 1fr); } }
+  @media (prefers-reduced-motion: reduce) { .features li:hover { translate: none; } }
 
   /* Spotlight: one feature told at length, with its own illustration */
-  .spotlight { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: center; margin-top: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 32px; }
-  .spotlight h3 { font-size: 24px; font-weight: 680; letter-spacing: -0.01em; }
-  .spotlight p { margin-top: 10px; font-size: 16px; color: var(--muted); }
-  .points { display: grid; gap: 10px; margin: 18px 0 0; padding: 0; list-style: none; }
-  .points li { position: relative; padding-left: 20px; font-size: 15.5px; color: var(--muted); }
-  .points li::before { content: ""; position: absolute; left: 3px; top: 0.62em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-  .preview-scene { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: center; gap: 6px; }
+  .spotlight { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: center; margin-top: 20px; padding: 40px; border-radius: 32px; }
+  .spotlight h3 { font-size: clamp(26px, 2.6vw, 34px); font-weight: 800; letter-spacing: -0.04em; line-height: 1.08; text-wrap: balance; }
+  .spotlight p { margin-top: 14px; color: var(--text-muted); }
+  .bullets { display: grid; gap: 10px; margin: 20px 0 0; padding: 0; list-style: none; }
+  .bullets li { position: relative; padding-left: 22px; font-size: 15.5px; color: var(--text-muted); }
+  .bullets li::before { content: ""; position: absolute; left: 3px; top: 0.62em; width: 7px; height: 7px; border-radius: 50%; background: var(--c-action); }
+  .preview-scene { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: center; gap: 8px; }
   .preview-scene .menu { width: 232px; }
-  .preview-scene .shot { display: block; width: 208px; max-width: 100%; margin-top: 30px; border: 1px solid var(--menu-border); box-shadow: var(--menu-shadow); }
+  .preview-scene .shot { display: block; width: 208px; max-width: 100%; margin-top: 30px; border: 1px solid var(--menu-border); border-radius: 4px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16), 0 18px 44px rgba(0, 0, 0, 0.34); }
   .menu .thumb { width: 36px; height: 20px; margin-right: 8px; border-radius: 2px; vertical-align: middle; }
-  @media (max-width: 900px) { .spotlight { grid-template-columns: minmax(0, 1fr); gap: 28px; padding: 24px; } }
+  @media (max-width: 960px) { .spotlight { grid-template-columns: minmax(0, 1fr); gap: 32px; padding: 26px; } }
 
-  kbd { display: inline-block; font-size: 0.78em; line-height: 1; padding: 4px 6px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; background: var(--surface); color: var(--text); white-space: nowrap; }
+  /* How it works: three steps in a row, each handing on to the next */
+  .flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; margin: 0; padding: 0; list-style: none; }
+  .flow li { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 28px; border-radius: 32px; }
+  .flow h3 { font-size: 26px; }
+  .flow h3 kbd { vertical-align: 0.14em; }
+  .flow p { font-size: 15.5px; color: var(--text-muted); }
+  .flow-foot { margin-top: auto; padding-top: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--hairline); font-size: 13.5px; color: var(--text-muted); }
+  .flow-foot .keys { display: inline-flex; gap: 4px; font-size: 15px; }
+  .flow-link {
+    position: absolute;
+    z-index: 2;
+    top: 50%;
+    right: -32px;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    margin-top: -16px;
+    border-radius: 50%;
+    color: var(--c-action);
+    background: var(--glass-fill-strong);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-shadow-sm);
+  }
+  .flow-link svg { width: 16px; height: 16px; }
+  @media (max-width: 960px) {
+    .flow { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+    .flow-link { top: auto; right: auto; bottom: -30px; left: 50%; margin: 0 0 0 -16px; rotate: 90deg; }
+  }
 
-  /* How it works */
-  .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: center; }
-  @media (max-width: 900px) { .split { grid-template-columns: minmax(0, 1fr); gap: 40px; } }
-  .steps { list-style: none; margin: 32px 0 0; padding: 0; counter-reset: step; display: grid; gap: 22px; }
-  .steps li { counter-increment: step; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 16px; }
-  .steps li::before { content: counter(step); display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 15px; }
-  .steps h3 { font-size: 18px; font-weight: 650; letter-spacing: -0.01em; margin: 5px 0 4px; }
-  .steps p { color: var(--muted); font-size: 15.5px; }
+  .tune { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 56px; align-items: center; margin-top: 88px; }
+  .tune h3 { font-size: clamp(28px, 3vw, 40px); font-weight: 800; letter-spacing: -0.04em; line-height: 1.05; text-wrap: balance; }
+  .tune p { margin-top: 16px; max-width: 28em; color: var(--text-muted); }
+  .tune .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 0; padding: 0; list-style: none; }
+  @media (max-width: 960px) { .tune { grid-template-columns: minmax(0, 1fr); gap: 36px; margin-top: 72px; } }
 
-  .settings { font-size: 13.5px; }
-  .settings .body { padding: 18px 20px 22px; background: var(--sunken); }
-  .settings h4 { margin: 0 0 8px; font-size: 11.5px; font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
-  .settings h4:not(:first-child) { margin-top: 18px; }
-  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; min-height: 46px; }
-  .row + .row { border-top: 1px solid var(--border); }
-  .row .keys { display: inline-flex; gap: 4px; }
-  .row .value { color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; background: var(--sunken); }
-  .row .remove { color: var(--muted); font-size: 16px; line-height: 1; }
+  .settings { font-size: 14px; }
+  .settings .body { padding: 20px 22px 24px; }
+  .settings h4 { margin: 0 0 8px; font: 500 11px/1.3 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--card-muted); }
+  .settings h4:not(:first-child) { margin-top: 20px; }
+  .panel { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; min-height: 48px; }
+  .row + .row { border-top: 1px solid rgba(255, 255, 255, 0.07); }
+  .row .keys { display: inline-flex; gap: 4px; flex: none; font-size: 15px; }
+  .row .remove { color: var(--card-muted); font-size: 17px; line-height: 1; }
 
   /* Install */
-  .install { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 40px; }
-  /* A third card would sit alone on its row, so it takes the whole row. */
-  .install .card:nth-child(odd):last-child { grid-column: 1 / -1; }
-  @media (max-width: 800px) { .install { grid-template-columns: minmax(0, 1fr); } }
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 26px; display: flex; flex-direction: column; }
-  .card.suggested { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-  .card-head { display: flex; align-items: center; gap: 12px; }
-  .card-head svg { width: 26px; height: 26px; flex: none; }
-  .card h3 { font-size: 21px; font-weight: 680; }
-  .card .req { font-size: 14px; color: var(--muted); margin-top: 4px; }
-  .card .how { font-size: 15px; color: var(--muted); margin-top: 18px; }
-  .command { display: flex; align-items: flex-start; gap: 10px; margin: 10px 0 0; padding: 10px 10px 10px 16px; background: var(--code-bg); color: var(--code-text); border-radius: 10px; }
-  .command pre { flex: 1; min-width: 0; margin: 0; padding: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
-  .command button { flex: none; min-width: 64px; font: 600 12.5px/1 system-ui, sans-serif; color: var(--code-text); background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 6px; padding: 7px 10px; cursor: pointer; }
-  .command button:hover { background: rgba(255, 255, 255, 0.18); }
-  .card .after { font-size: 14.5px; color: var(--muted); margin-top: 14px; flex: 1; }
+  .install { display: grid; gap: 20px; }
+  .card { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 20px 48px; align-items: center; padding: 28px 32px; }
+  @media (max-width: 860px) { .card { grid-template-columns: minmax(0, 1fr); padding: 24px; } }
+  .card.suggested { border-color: color-mix(in srgb, var(--c-action) 60%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--c-action) 34%, transparent), 0 20px 44px -12px color-mix(in srgb, var(--c-action) 40%, transparent); }
+  .card .tag { display: none; margin-top: 16px; }
+  .card.suggested .tag { display: inline-block; }
+  .card-head { display: flex; align-items: center; gap: 14px; }
+  .card-head .os { display: grid; place-items: center; width: 48px; height: 48px; flex: none; border-radius: 14px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); }
+  .card-head svg { width: 24px; height: 24px; }
+  .card h3 { display: flex; align-items: center; font: 500 22px/1.2 var(--mono); letter-spacing: -0.02em; }
+  .card h3::after { content: ""; width: 10px; height: 3px; margin: 0 0 4px 6px; align-self: flex-end; background: var(--c-action); box-shadow: 0 0 8px var(--c-action); animation: blink 1s step-end infinite; }
+  @media (prefers-reduced-motion: reduce) { .card h3::after { animation: none; } }
+  .card .req { margin-top: 3px; font-size: 13.5px; line-height: 1.4; color: var(--card-muted); }
+  .card .how { font-size: 14.5px; color: var(--card-muted); }
+  .command { display: flex; align-items: flex-start; gap: 10px; margin-top: 10px; padding: 10px 10px 10px 14px; border-radius: 12px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04); }
+  .command pre { flex: 1; min-width: 0; margin: 0; padding: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.65; color: #c8d0e7; }
+  .command button { flex: none; min-width: 66px; font: 600 12.5px/1 var(--display); color: var(--card-text); background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; padding: 8px 10px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+  .command button:hover { background: color-mix(in srgb, var(--c-action) 22%, transparent); border-color: color-mix(in srgb, var(--c-action) 50%, transparent); }
+  .card .after { margin-top: 14px; font-size: 14.5px; line-height: 1.55; color: var(--card-muted); }
 
   /* FAQ */
-  .faq { margin-top: 32px; max-width: 760px; border-top: 1px solid var(--border); }
-  .faq details { border-bottom: 1px solid var(--border); }
-  .faq summary { cursor: pointer; padding: 18px 28px 18px 0; font-weight: 620; list-style: none; position: relative; }
+  .faq-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 64px; align-items: start; }
+  .faq-intro { position: sticky; top: 120px; display: flex; flex-direction: column; align-items: flex-start; gap: 22px; }
+  .faq { display: flex; flex-direction: column; gap: 14px; }
+  .faq details { border-radius: 26px; }
+  .faq summary { position: relative; display: block; cursor: pointer; padding: 22px 76px 22px 28px; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.3; border-radius: 26px; }
   .faq summary::-webkit-details-marker { display: none; }
-  .faq summary::after { content: "+"; position: absolute; right: 4px; top: 14px; font-size: 22px; font-weight: 400; color: var(--muted); }
-  .faq details[open] summary::after { content: "\2212"; }
-  .faq details p { padding: 0 28px 20px 0; color: var(--muted); font-size: 16px; }
+  .faq summary::before, .faq summary::after { content: ""; position: absolute; top: 50%; }
+  .faq summary::before { right: 20px; width: 36px; height: 36px; margin-top: -18px; border-radius: 50%; background: var(--glass-fill-strong); box-shadow: var(--glass-shadow-sm); transition: background-color 0.2s; }
+  .faq summary::after {
+    right: 32px;
+    width: 12px;
+    height: 12px;
+    margin-top: -6px;
+    background: linear-gradient(currentColor, currentColor) center / 12px 1.5px no-repeat, linear-gradient(currentColor, currentColor) center / 1.5px 12px no-repeat;
+    transition: rotate 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.2s;
+  }
+  .faq details[open] summary::before { background: var(--smoke); }
+  .faq details[open] summary::after { rotate: 45deg; color: #fff; }
+  .faq details p { max-width: 38em; padding: 0 28px 22px; font-size: 15.5px; line-height: 1.65; color: var(--text-muted); }
   .faq details p + p { margin-top: -8px; }
-  .faq code { font-size: 0.86em; background: var(--sunken); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; overflow-wrap: anywhere; }
+  .faq details a { color: var(--c-content); }
+  .faq details a:hover { color: var(--c-action); }
+  .faq code { font-size: 0.84em; padding: 2px 6px; border-radius: 6px; background: var(--glass-fill-strong); overflow-wrap: anywhere; }
+  /* Where the browser can animate to an element's natural height, answers slide open. */
+  @supports (interpolate-size: allow-keywords) {
+    @media (prefers-reduced-motion: no-preference) {
+      .faq details { interpolate-size: allow-keywords; }
+      .faq details::details-content { block-size: 0; overflow: clip; transition: block-size 0.4s ease, content-visibility 0.4s allow-discrete; }
+      .faq details[open]::details-content { block-size: auto; }
+    }
+  }
+  @media (max-width: 960px) {
+    .faq-layout { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+    .faq-intro { position: static; }
+  }
+  @media (max-width: 640px) {
+    .faq summary { padding: 20px 68px 20px 22px; font-size: 16.5px; }
+    .faq summary::before { right: 16px; }
+    .faq summary::after { right: 28px; }
+    .faq details p { padding: 0 22px 20px; }
+  }
 
-  footer { border-top: 1px solid var(--border); padding: 32px 0 44px; font-size: 14.5px; color: var(--muted); }
-  footer .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 24px; }
-  footer nav { display: flex; flex-wrap: wrap; gap: 20px; }
-  footer a { color: var(--muted); }
-  footer a:hover { color: var(--text); }
+  /* Footer: one dark terminal panel */
+  footer { padding: 24px 24px 28px; }
+  .ft-card { max-width: 1280px; margin: 0 auto; padding: 56px 56px 28px; border-radius: 28px; box-shadow: 0 30px 60px -30px rgba(10, 13, 30, 0.55); }
+  .ft-card .card-glow { width: 420px; height: 420px; top: -180px; right: -120px; filter: blur(70px); }
+  .ft-top { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 48px 64px; }
+  .ft-brand { display: grid; gap: 18px; align-content: start; justify-items: start; }
+  .ft-brand p { max-width: 28em; font-size: 15.5px; color: var(--card-muted); }
+  .ft-os { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ft-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+  .ft-col { display: grid; gap: 12px; align-content: start; }
+  .ft-col h4 { margin: 0 0 6px; font: 500 11px/1.3 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--card-muted); }
+  .ft-col a { width: fit-content; font-size: 15.5px; color: #d4d8e4; text-decoration: none; transition: color 0.2s, translate 0.25s var(--ease); }
+  .ft-col a:hover { color: #fff; translate: 3px 0; }
+  .ft-cta { margin-top: 48px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 24px; padding: 18px 18px 18px 24px; border-radius: 18px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); }
+  .ft-cta div { display: grid; gap: 2px; }
+  .ft-cta strong { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }
+  .ft-cta span { font-size: 14.5px; color: var(--card-muted); }
+  .ft-bottom { margin-top: 28px; padding-top: 22px; border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; font-size: 13.5px; color: var(--card-muted); }
+  .ft-bottom nav { display: flex; flex-wrap: wrap; gap: 18px; }
+  .ft-bottom a { color: var(--card-muted); text-decoration: none; transition: color 0.2s; }
+  .ft-bottom a:hover { color: #fff; }
+  @media (max-width: 960px) {
+    .ft-card { padding: 40px 28px 24px; }
+    .ft-top { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 560px) {
+    footer { padding-inline: 12px; }
+    .ft-card { padding: 32px 22px 22px; border-radius: 24px; }
+    .ft-cta { padding: 18px; }
+  }
+
+  /* Motion: .mo is set in the head unless the visitor asked for less of it */
+  .mo .rv { opacity: 0; translate: 0 2rem; transition: opacity 0.8s ease var(--d, 0s), translate 1s var(--ease) var(--d, 0s); }
+  .mo .rv.is-in { opacity: 1; translate: 0 0; }
+  .mo .pane.rv { transition: opacity 0.8s ease var(--d, 0s), translate 1s var(--ease) var(--d, 0s), background-color 400ms var(--theme-ease), box-shadow 400ms var(--theme-ease); }
+  .mo .pane.rv.is-in.settled { transition: background-color 400ms var(--theme-ease), box-shadow 400ms var(--theme-ease), translate 0.5s var(--ease); }
+  .mo .hero-in { animation: hero-in 1s var(--ease) both; animation-delay: var(--d, 0s); }
+  .mo .wordmark { animation: wordmark-in 1.6s var(--ease) both; }
+  .mo .scene { animation: scene-in 1.2s var(--ease) 0.15s both; }
+  @keyframes hero-in { from { opacity: 0; translate: -3rem 0; } }
+  @keyframes wordmark-in { from { opacity: 0; scale: 0.92; } }
+  @keyframes scene-in { from { opacity: 0; translate: 0 2rem; } }
+  @media (prefers-reduced-motion: reduce) {
+    body, .ambient i, .switcher::after, .site-nav { transition: none; }
+    .dcard.lifts:hover { transform: none; }
+    .dcard.lifts:hover .card-grid { animation: none; }
+  }
 </style>
 </head>
 <body>
 
-<header class="wrap site-header">
+<div class="ambient" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+
+<header class="site-nav">
   <a class="brand" href="./"><img src="icon.svg" alt="" />Clipdeck</a>
-  <nav class="site-nav" aria-label="Main">
-    <a class="optional" href="#features">Features</a>
-    <a class="optional" href="#how">How it works</a>
-    <a class="optional" href="#faq">FAQ</a>
+  <nav class="nav-links" aria-label="Main">
+    <a href="#features">Features</a>
+    <a href="#how">How it works</a>
+    <a href="#install">Install</a>
+    <a href="#faq">FAQ</a>
     <a href="https://github.com/baala3/clipdeck">GitHub</a>
-    <button class="theme-toggle" type="button" aria-label="Switch to dark theme">
-      <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.500A8 8 0 0 1 9.500 4a8 8 0 1 0 10.500 10.500z"/></svg>
-      <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.900 4.900l1.400 1.400M17.700 17.700l1.400 1.400M4.900 19.100l1.400-1.400M17.700 6.300l1.400-1.400"/></svg>
-    </button>
   </nav>
+  <div class="nav-actions">
+    <fieldset class="switcher">
+      <legend class="sr-only">Theme</legend>
+      <label title="Light">
+        <input type="radio" name="theme" value="light" aria-label="Light theme" checked />
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.900 4.900l1.400 1.400M17.700 17.700l1.400 1.400M4.900 19.100l1.400-1.400M17.700 6.300l1.400-1.400"/></svg>
+      </label>
+      <label title="Dark">
+        <input type="radio" name="theme" value="dark" aria-label="Dark theme" />
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.500A8 8 0 0 1 9.500 4a8 8 0 1 0 10.500 10.500z"/></svg>
+      </label>
+      <label title="Dim">
+        <input type="radio" name="theme" value="dim" aria-label="Dim theme" />
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 14a4 4 0 0 1 8 0M12 4v2.500M4.900 7.900l1.800 1.800M19.100 7.900l-1.800 1.800M3 14h18M7 18h10M10 22h4"/></svg>
+      </label>
+    </fieldset>
+    <a class="btn primary small" href="#install">Install</a>
+  </div>
 </header>
 
 <main>
@@ -263,94 +722,137 @@ try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dat
       <rect x="40" y="80" width="108" height="2" fill="#aab6c8" />
     </symbol>
   </svg>
-  <div class="wrap hero">
-    <div>
-      <h1>Everything you copied, <em>one hotkey away.</em></h1>
-      <p class="lede">Clipdeck is a small clipboard manager for Windows, macOS and Linux. It remembers what you copy and pastes it back from a menu right at your cursor.</p>
-      <div class="cta">
-        <a class="btn primary" href="#install">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
-          Install Clipdeck
-        </a>
-        <a class="btn" href="https://github.com/baala3/clipdeck">View on GitHub</a>
-      </div>
-      <p class="fineprint">Free and open source. No account, no subscription.</p>
-    </div>
+  <div class="hero">
+    <div class="wordmark" aria-hidden="true">CLIPDECK</div>
 
-    <div class="scene" role="img" aria-label="Illustration: the Clipdeck menu open over a document, listing recent Clips under History and saved ones under Pinned.">
-      <div class="window" aria-hidden="true">
-        <div class="window-bar"><i></i><i></i><i></i><span>release-notes.md</span></div>
-        <div class="doc">
-          <b>Release notes</b>
-          Thanks to everyone who tested this build.<br />
-          Grab the installer from<span class="caret"></span>
+    <div class="hero-grid">
+      <div>
+        <h1 class="hero-in">Everything you copied, <em>one hotkey away.</em></h1>
+        <p class="lede hero-in" style="--d: 0.08s">Clipdeck is a small clipboard manager for Windows, macOS and Linux. It remembers what you copy and pastes it back from a menu right at your cursor.</p>
+        <div class="cta hero-in" style="--d: 0.15s">
+          <a class="btn primary" href="#install">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+            Install Clipdeck
+          </a>
+          <a class="btn" href="https://github.com/baala3/clipdeck">View on GitHub</a>
         </div>
-      </div>
-      <div class="menu" aria-hidden="true">
-        <ul>
-          <li class="label"><span>History</span></li>
-          <li><span>1. cargo test --workspace</span><span class="key" data-mod>Ctrl+1</span></li>
-          <li class="active"><span>2. https://github.com/baala3/clip...</span><span class="key" data-mod>Ctrl+2</span></li>
-          <li><span>3. Thanks to everyone who tested...</span><span class="key" data-mod>Ctrl+3</span></li>
-          <li><span>4. #1C1C1E</span><span class="key" data-mod>Ctrl+4</span></li>
-          <li><span><svg class="thumb" viewBox="0 0 160 90"><use href="#shot" /></svg>5. Image 1280 &times; 720</span><span class="key" data-mod>Ctrl+5</span></li>
-          <li><span>11 - 20</span><span class="chev">&#9656;</span></li>
-          <li class="sep"></li>
-          <li class="label"><span>Pinned</span></li>
-          <li><span>1. hello@example.com</span></li>
-          <li><span>2. Best regards, Sam</span></li>
-          <li class="sep"></li>
-          <li><span>More</span><span class="chev">&#9656;</span></li>
+        <ul class="points hero-in" style="--d: 0.22s">
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.600" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.500 7l-5 5 5 5M15.500 7l5 5-5 5M13.500 4.500l-3 15"/></svg>
+            <span><strong>Free and open source</strong>No account, no subscription</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.600" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7.500 3v5.500c0 4.600-3.200 8.400-7.500 9.500-4.300-1.100-7.500-4.900-7.500-9.500V6L12 3z"/><path d="M9 12l2 2 4-4"/></svg>
+            <span><strong>Private by design</strong>Clips stay on your computer</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.600" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.500" width="18" height="12" rx="2"/><path d="M8.500 20h7M12 16.500V20"/></svg>
+            <span><strong>Three platforms</strong>Windows, macOS and Linux</span>
+          </li>
         </ul>
       </div>
-      <svg class="cursor" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 2l13 7.2-5.6 1.5L13.6 17l-2.7 1.3-3.2-6.2L3.6 16z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg>
+
+      <div class="scene" role="img" aria-label="Illustration: the Clipdeck menu open over a document, listing recent Clips under History and saved ones under Pinned.">
+        <div class="scene-glow" aria-hidden="true"></div>
+        <div class="window dcard" aria-hidden="true">
+          <span class="card-fx" aria-hidden="true"><span class="card-grid"></span><span class="card-glow"></span></span>
+          <div class="window-bar"><i></i><i></i><i></i><span>release-notes.md</span></div>
+          <div class="doc">
+            <b>Release notes</b>
+            Thanks to everyone who tested this build.<br />
+            Grab the installer from<span class="caret"></span>
+          </div>
+        </div>
+        <div class="menu" aria-hidden="true">
+          <ul>
+            <li class="label"><span>History</span></li>
+            <li><span>1. cargo test --workspace</span><span class="key" data-mod>Ctrl+1</span></li>
+            <li class="active"><span>2. https://github.com/baala3/clip...</span><span class="key" data-mod>Ctrl+2</span></li>
+            <li><span>3. Thanks to everyone who tested...</span><span class="key" data-mod>Ctrl+3</span></li>
+            <li><span>4. #1C1C1E</span><span class="key" data-mod>Ctrl+4</span></li>
+            <li><span><svg class="thumb" viewBox="0 0 160 90"><use href="#shot" /></svg>5. Image 1280 &times; 720</span><span class="key" data-mod>Ctrl+5</span></li>
+            <li><span>11 - 20</span><span class="chev">&#9656;</span></li>
+            <li class="sep"></li>
+            <li class="label"><span>Pinned</span></li>
+            <li><span>1. hello@example.com</span></li>
+            <li><span>2. Best regards, Sam</span></li>
+            <li class="sep"></li>
+            <li><span>More</span><span class="chev">&#9656;</span></li>
+          </ul>
+        </div>
+        <svg class="cursor" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 2l13 7.2-5.6 1.5L13.6 17l-2.7 1.3-3.2-6.2L3.6 16z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg>
+        <div class="hotkey dcard" aria-hidden="true">
+          <span class="card-fx" aria-hidden="true"><span class="card-grid"></span><span class="card-glow"></span></span>
+          <span class="kicker">Open menu</span>
+          <span class="keys"><kbd data-mod>Ctrl</kbd><kbd>Shift</kbd><kbd>D</kbd></span>
+        </div>
+      </div>
     </div>
   </div>
 
-  <section id="features" class="band">
-    <div class="wrap">
-      <p class="eyebrow">Features</p>
-      <h2>Copy as usual. Find it again later.</h2>
-      <p class="section-lede">Clipdeck sits quietly in your tray or menu bar and keeps a History of what you copy, so the thing you copied ten minutes ago is never lost.</p>
+  <section id="features">
+    <div class="inner">
+      <div class="section-head">
+        <h2 class="rv">Copy as usual. <em>Find it again later.</em></h2>
+        <p class="section-sub rv">Clipdeck sits quietly in your tray or menu bar and keeps a History of what you copy, so the thing you copied ten minutes ago is never lost.</p>
+      </div>
 
       <ul class="features">
-        <li>
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v5l3 2"/><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.5v3.8h3.8"/></svg></div>
+        <li class="pane rv">
+          <div class="feature-top">
+            <span class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v5l3 2"/><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.5v3.8h3.8"/></svg></span>
+            <span class="kicker">01</span>
+          </div>
           <h3>A History of your copies</h3>
           <p>Text and images are saved the moment you copy them. Keep the last 200 Clips, or as many as 2000.</p>
         </li>
-        <li>
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3l14 8-6 1.6L16 19l-2.6 1.2-3-6.2L5 18z"/></svg></div>
+        <li class="pane rv">
+          <div class="feature-top">
+            <span class="icon-tile accent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3l14 8-6 1.6L16 19l-2.6 1.2-3-6.2L5 18z"/></svg></span>
+            <span class="kicker">02</span>
+          </div>
           <h3>A menu at your cursor</h3>
           <p>One hotkey opens a native menu where your mouse already is. Pick a Clip and it is pasted straight into the app you are working in.</p>
         </li>
-        <li>
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 6 3.5 3.5h-11L10 10z"/><path d="M12 13.5V20"/></svg></div>
+        <li class="pane rv">
+          <div class="feature-top">
+            <span class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l-1 6 3.5 3.5h-11L10 10z"/><path d="M12 13.5V20"/></svg></span>
+            <span class="kicker">03</span>
+          </div>
           <h3>Pin what you reuse</h3>
           <p>Keep an address, a reply or a command in the Pinned list, where it stays until you remove it. You can write your own, too.</p>
         </li>
-        <li>
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M7.5 14h9"/></svg></div>
+        <li class="pane rv">
+          <div class="feature-top">
+            <span class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M7.5 14h9"/></svg></span>
+            <span class="kicker">04</span>
+          </div>
           <h3>Fast from the keyboard</h3>
           <p>Number keys pick the first ten Clips. On Windows, right-click a Clip to edit, pin or delete it; anywhere, hold a modifier while you click. Every hotkey can be changed.</p>
         </li>
-        <li>
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7.5 3v5.5c0 4.5-3.1 8-7.5 9.5-4.400-1.500-7.500-5-7.500-9.500V6z"/><path d="M9 12l2.200 2.200L15.200 10"/></svg></div>
+        <li class="pane rv">
+          <div class="feature-top">
+            <span class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7.5 3v5.5c0 4.5-3.1 8-7.5 9.5-4.400-1.500-7.500-5-7.500-9.500V6z"/><path d="M9 12l2.200 2.200L15.200 10"/></svg></span>
+            <span class="kicker">05</span>
+          </div>
           <h3>Private by design</h3>
           <p>Your Clips stay on your computer. Copies from password managers are skipped, and you can exclude any app or pause capture.</p>
         </li>
-        <li>
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-13.700 5.600"/><path d="M4 12a8 8 0 0 1 13.700-5.600"/><path d="M18 3v3.600h-3.600M6 21v-3.600h3.600"/></svg></div>
+        <li class="pane rv">
+          <div class="feature-top">
+            <span class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-13.700 5.600"/><path d="M4 12a8 8 0 0 1 13.700-5.600"/><path d="M18 3v3.600h-3.600M6 21v-3.600h3.600"/></svg></span>
+            <span class="kicker">06</span>
+          </div>
           <h3>Looks after itself</h3>
           <p>Clipdeck starts when you log in and checks for updates once a day. It always asks before installing one.</p>
         </li>
       </ul>
 
-      <div class="spotlight">
+      <div class="spotlight pane rv">
         <div>
           <h3>Screenshots and pictures, not just text</h3>
           <p>Copy an image or take a screenshot and it lands in History beside your text. Choose it and it is pasted back as an image.</p>
-          <ul class="points">
+          <ul class="bullets">
             <li>Each image shows a thumbnail and its size, so you can tell one screenshot from the next.</li>
             <li>On Windows, rest on an image to see it larger before you paste.</li>
             <li>Pin an image to keep it, just like text.</li>
@@ -375,161 +877,246 @@ try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dat
   </section>
 
   <section id="how">
-    <div class="wrap split">
-      <div>
-        <p class="eyebrow">How it works</p>
-        <h2>Three steps, no new habits.</h2>
-        <ol class="steps">
-          <li>
-            <div>
-              <h3>Copy like you always do</h3>
-              <p>Clipdeck notices each copy and adds it to your History. Copying the same thing twice just moves it back to the top.</p>
-            </div>
-          </li>
-          <li>
-            <div>
-              <h3>Press <kbd data-mod>Ctrl</kbd> <kbd>Shift</kbd> <kbd>D</kbd></h3>
-              <p>The menu opens at your cursor with History and Pinned together. Long Clips are shortened to one line, and older ones are tucked into folders.</p>
-            </div>
-          </li>
-          <li>
-            <div>
-              <h3>Choose a Clip</h3>
-              <p>Click it or press its number. Clipdeck pastes it where you were typing and gets out of the way.</p>
-            </div>
-          </li>
-        </ol>
+    <div class="inner">
+      <div class="section-head">
+        <h2 class="rv">Three steps, <em>no new habits.</em></h2>
+        <p class="section-sub rv">Nothing to learn and nothing to organise. Clipdeck stays out of the way until you ask for it.</p>
       </div>
 
-      <div class="window settings" role="img" aria-label="Illustration: the Clipdeck Settings window, showing the hotkeys, the History size and the excluded apps.">
-        <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Clipdeck Settings</span></div>
-        <div class="body" aria-hidden="true">
-          <h4>Hotkeys</h4>
-          <div class="panel">
-            <div class="row"><span>Open menu (History and Pinned)</span><span class="keys"><kbd data-mod>Ctrl</kbd><kbd>Shift</kbd><kbd>D</kbd></span></div>
-            <div class="row"><span>Open History menu</span><span class="keys"><kbd data-mod>Ctrl</kbd><kbd>Shift</kbd><kbd>H</kbd></span></div>
-            <div class="row"><span>Open Pinned menu</span><span class="keys"><kbd data-mod>Ctrl</kbd><kbd>Shift</kbd><kbd>P</kbd></span></div>
+      <ol class="flow">
+        <li class="pane rv">
+          <div class="feature-top">
+            <span class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8.500" y="8.500" width="12" height="12" rx="2.500"/><path d="M15.500 5.500v-.500a2 2 0 0 0-2-2H5.500a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2H6"/></svg></span>
+            <span class="kicker">Step 01</span>
           </div>
-          <h4>History</h4>
-          <div class="panel">
-            <div class="row"><span>Clips to keep</span><span class="value">200</span></div>
+          <h3>Copy like you always do</h3>
+          <p>Clipdeck notices each copy and adds it to your History. Copying the same thing twice just moves it back to the top.</p>
+          <div class="flow-foot"><span>Your usual copy</span><span class="keys"><kbd data-mod>Ctrl</kbd><kbd>C</kbd></span></div>
+          <span class="flow-link" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        </li>
+        <li class="pane rv">
+          <div class="feature-top">
+            <span class="icon-tile accent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.500" y="6" width="19" height="12" rx="2.500"/><path d="M6.500 10h.010M10 10h.010M13.500 10h.010M17 10h.010M7.500 14h9"/></svg></span>
+            <span class="kicker">Step 02</span>
           </div>
-          <h4>Excluded apps</h4>
-          <div class="panel">
-            <div class="row"><span>1Password</span><span class="remove">&times;</span></div>
-            <div class="row"><span>KeePass</span><span class="remove">&times;</span></div>
+          <h3>Press <kbd data-mod>Ctrl</kbd> <kbd>Shift</kbd> <kbd>D</kbd></h3>
+          <p>The menu opens at your cursor with History and Pinned together. Long Clips are shortened to one line, and older ones are tucked into folders.</p>
+          <div class="flow-foot"><span>Opens the menu</span><span class="keys"><kbd data-mod>Ctrl</kbd><kbd>Shift</kbd><kbd>D</kbd></span></div>
+          <span class="flow-link" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        </li>
+        <li class="pane rv">
+          <div class="feature-top">
+            <span class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3l14 8-6 1.600L16 19l-2.600 1.200-3-6.200L5 18z"/></svg></span>
+            <span class="kicker">Step 03</span>
+          </div>
+          <h3>Choose a Clip</h3>
+          <p>Click it or press its number. Clipdeck pastes it where you were typing and gets out of the way.</p>
+          <div class="flow-foot"><span>The first ten Clips</span><span class="keys"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span></div>
+        </li>
+      </ol>
+
+      <div class="tune">
+        <div class="rv">
+          <h3>Settings for when you want them.</h3>
+          <p>Every hotkey can be changed. Choose how many Clips to keep, and list the apps Clipdeck should never capture from.</p>
+          <ul class="chips">
+            <li class="chip">Hotkeys</li>
+            <li class="chip">200 to 2000 Clips</li>
+            <li class="chip">Excluded apps</li>
+          </ul>
+        </div>
+
+        <div class="window settings dcard rv" role="img" aria-label="Illustration: the Clipdeck Settings window, showing the hotkeys, the History size and the excluded apps.">
+          <span class="card-fx" aria-hidden="true"><span class="card-grid"></span><span class="card-glow"></span></span>
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Clipdeck Settings</span></div>
+          <div class="body" aria-hidden="true">
+            <h4>Hotkeys</h4>
+            <div class="panel">
+              <div class="row"><span>Open menu (History and Pinned)</span><span class="keys"><kbd data-mod>Ctrl</kbd><kbd>Shift</kbd><kbd>D</kbd></span></div>
+              <div class="row"><span>Open History menu</span><span class="keys"><kbd data-mod>Ctrl</kbd><kbd>Shift</kbd><kbd>H</kbd></span></div>
+              <div class="row"><span>Open Pinned menu</span><span class="keys"><kbd data-mod>Ctrl</kbd><kbd>Shift</kbd><kbd>P</kbd></span></div>
+            </div>
+            <h4>History</h4>
+            <div class="panel">
+              <div class="row"><span>Clips to keep</span><span class="value">200</span></div>
+            </div>
+            <h4>Excluded apps</h4>
+            <div class="panel">
+              <div class="row"><span>1Password</span><span class="remove">&times;</span></div>
+              <div class="row"><span>KeePass</span><span class="remove">&times;</span></div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <section id="install" class="band">
-    <div class="wrap">
-      <p class="eyebrow">Install</p>
-      <h2>One line, and it is running.</h2>
-      <p class="section-lede">Paste the command for your computer. It downloads the latest version, installs it for your user only and starts Clipdeck.</p>
+  <section id="install">
+    <div class="inner">
+      <div class="section-head">
+        <h2 class="rv">One line, <em>and it is running.</em></h2>
+        <p class="section-sub rv">Paste the command for your computer. It downloads the latest version, installs it for your user only and starts Clipdeck.</p>
+      </div>
 
       <div class="install">
-        <div class="card" data-os="windows">
+        <div class="card dcard lifts rv" data-os="windows">
+          <span class="card-fx" aria-hidden="true"><span class="card-grid"></span><span class="card-glow"></span></span>
+          <div>
           <div class="card-head">
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.300l7.500-1v7.200H3zM11.500 4.200L21 3v8.500h-9.500zM3 12.500h7.500v7.200L3 18.700zM11.500 12.500H21V21l-9.500-1.300z"/></svg>
+            <span class="os"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.300l7.500-1v7.200H3zM11.500 4.200L21 3v8.500h-9.500zM3 12.500h7.500v7.200L3 18.700zM11.500 12.500H21V21l-9.500-1.300z"/></svg></span>
             <div>
               <h3>Windows</h3>
               <p class="req">Windows 10 or 11, 64-bit</p>
             </div>
           </div>
+            <span class="tag">Your computer</span>
+          </div>
+          <div>
           <p class="how">Open PowerShell and run:</p>
           <div class="command">
             <pre><code>irm https://raw.githubusercontent.com/baala3/clipdeck/main/install.ps1 | iex</code></pre>
             <button type="button">Copy</button>
           </div>
           <p class="after">No administrator rights needed. Clipdeck then lives in the notification area, next to the clock.</p>
+          </div>
         </div>
 
-        <div class="card" data-os="mac">
+        <div class="card dcard lifts rv" data-os="mac">
+          <span class="card-fx" aria-hidden="true"><span class="card-grid"></span><span class="card-glow"></span></span>
+          <div>
           <div class="card-head">
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.400 12.600c0-2.300 1.900-3.400 2-3.500-1.100-1.600-2.800-1.800-3.400-1.800-1.400-.100-2.800.900-3.500.900-.700 0-1.900-.800-3.100-.800-1.600 0-3.100.900-3.900 2.400-1.700 2.900-.400 7.200 1.200 9.500.800 1.200 1.700 2.400 3 2.400 1.200 0 1.700-.800 3.100-.800 1.500 0 1.900.800 3.100.800 1.300 0 2.100-1.200 2.900-2.300.900-1.300 1.300-2.600 1.300-2.700-.100 0-2.700-1-2.700-4.100zM14.200 5.700c.600-.800 1.100-1.900 1-3-.900 0-2.100.600-2.800 1.400-.600.700-1.100 1.800-1 2.900 1 .100 2.100-.500 2.800-1.300z"/></svg>
+            <span class="os"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.400 12.600c0-2.300 1.900-3.400 2-3.500-1.100-1.600-2.800-1.800-3.400-1.800-1.400-.100-2.800.900-3.500.900-.700 0-1.900-.800-3.100-.800-1.600 0-3.100.900-3.900 2.400-1.700 2.900-.400 7.200 1.200 9.500.800 1.200 1.700 2.400 3 2.400 1.200 0 1.700-.800 3.100-.800 1.500 0 1.900.800 3.100.800 1.300 0 2.100-1.200 2.900-2.300.900-1.300 1.300-2.600 1.300-2.700-.100 0-2.700-1-2.700-4.100zM14.200 5.700c.600-.800 1.100-1.900 1-3-.900 0-2.100.600-2.800 1.400-.600.700-1.100 1.800-1 2.900 1 .100 2.100-.500 2.800-1.300z"/></svg></span>
             <div>
               <h3>macOS</h3>
               <p class="req">macOS 11 or later, Apple silicon and Intel</p>
             </div>
           </div>
+            <span class="tag">Your computer</span>
+          </div>
+          <div>
           <p class="how">Open Terminal and run:</p>
           <div class="command">
             <pre><code>curl -fsSL https://raw.githubusercontent.com/baala3/clipdeck/main/install.sh | sh</code></pre>
             <button type="button">Copy</button>
           </div>
           <p class="after">Clipdeck then lives in the menu bar. The first time you choose a Clip, macOS asks you to allow Accessibility so it can paste for you.</p>
+          </div>
         </div>
 
-        <div class="card" data-os="linux">
+        <div class="card dcard lifts rv" data-os="linux">
+          <span class="card-fx" aria-hidden="true"><span class="card-grid"></span><span class="card-glow"></span></span>
+          <div>
           <div class="card-head">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.500"/><path d="M7 9.500l3 2.500-3 2.500M12.500 15H17"/></svg>
+            <span class="os"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.500"/><path d="M7 9.500l3 2.500-3 2.500M12.500 15H17"/></svg></span>
             <div>
               <h3>Linux</h3>
               <p class="req">64-bit Intel or AMD, in an X11 session (not Wayland yet)</p>
             </div>
           </div>
+            <span class="tag">Your computer</span>
+          </div>
+          <div>
           <p class="how">Open a terminal and run:</p>
           <div class="command">
             <pre><code>curl -fsSL https://raw.githubusercontent.com/baala3/clipdeck/main/install.sh | sh</code></pre>
             <button type="button">Copy</button>
           </div>
           <p class="after">No administrator rights needed. Clipdeck installs as a single AppImage and then lives in the system tray.</p>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
   <section id="faq">
-    <div class="wrap">
-      <p class="eyebrow">Questions</p>
-      <h2>Good to know</h2>
+    <div class="inner faq-layout">
+      <div class="faq-intro rv">
+        <h2>Good <em>to know.</em></h2>
+        <p class="section-sub">Anything else is in the <a href="https://github.com/baala3/clipdeck/blob/main/docs/INSTALL.md">install guide</a>, or ask on <a href="https://github.com/baala3/clipdeck/issues">GitHub</a>.</p>
+        <a class="btn primary" href="#install">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+          Install Clipdeck
+        </a>
+      </div>
 
       <div class="faq">
-        <details>
-          <summary>Is Clipdeck really free?</summary>
-          <p>Yes. There is no subscription, no paid tier and no ads. The code is open source under the MIT License.</p>
-        </details>
-        <details>
-          <summary>Why a command and not a download button?</summary>
-          <p>Clipdeck is not signed with a paid developer certificate. Windows warns about an unsigned app downloaded with a browser, and macOS refuses to open one. The one-line command installs the same app without either problem.</p>
-          <p>The scripts are short and you can read them first: <a href="https://github.com/baala3/clipdeck/blob/main/install.ps1">install.ps1</a> for Windows and <a href="https://github.com/baala3/clipdeck/blob/main/install.sh">install.sh</a> for macOS and Linux. Some Windows 11 PCs have Smart App Control switched on, which blocks unsigned apps either way; the <a href="https://github.com/baala3/clipdeck/blob/main/docs/INSTALL.md">install guide</a> explains.</p>
-        </details>
-        <details>
-          <summary>Where are my Clips stored?</summary>
-          <p>On your own computer, in your user folder: <code>%LOCALAPPDATA%\dev.clipdeck.app</code> on Windows, <code>~/Library/Application Support/dev.clipdeck.app</code> on macOS and <code>~/.local/share/dev.clipdeck.app</code> on Linux. There is no account and no cloud sync.</p>
-        </details>
-        <details>
-          <summary>Does it save my passwords?</summary>
-          <p>Password managers mark what they copy as not meant for clipboard tools, and Clipdeck respects that. You can also add any app to the Excluded apps list in Settings, or pause capture from the menu whenever you like.</p>
-        </details>
-        <details>
-          <summary>Why does macOS ask for the Accessibility permission?</summary>
-          <p>Pasting into another app is something macOS only allows with that permission. Until you grant it, choosing a Clip still copies it and you paste with <kbd>&#8984;</kbd> <kbd>V</kbd> yourself.</p>
-        </details>
-        <details>
-          <summary>How do I uninstall it?</summary>
-          <p>On Windows, use "Add or remove programs". On macOS, quit Clipdeck from its menu bar icon and drag it from Applications to the Trash. On Linux, quit it from its menu and delete <code>~/.local/bin/Clipdeck.AppImage</code>. The <a href="https://github.com/baala3/clipdeck/blob/main/docs/INSTALL.md">install guide</a> lists the leftover files you can delete.</p>
-        </details>
-        <details>
-          <summary>Does it work on Wayland?</summary>
-          <p>Not yet. On Linux, Clipdeck needs an X11 session, which most distributions still offer on the login screen, often as "Xorg". Wayland keeps apps from watching the clipboard, setting hotkeys and pasting for you in the ways Clipdeck does all three.</p>
-        </details>
+      <details class="pane" name="faq" open>
+        <summary>Is Clipdeck really free?</summary>
+        <p>Yes. There is no subscription, no paid tier and no ads. The code is open source under the MIT License.</p>
+      </details>
+      <details class="pane" name="faq">
+        <summary>Why a command and not a download button?</summary>
+        <p>Clipdeck is not signed with a paid developer certificate. Windows warns about an unsigned app downloaded with a browser, and macOS refuses to open one. The one-line command installs the same app without either problem.</p>
+        <p>The scripts are short and you can read them first: <a href="https://github.com/baala3/clipdeck/blob/main/install.ps1">install.ps1</a> for Windows and <a href="https://github.com/baala3/clipdeck/blob/main/install.sh">install.sh</a> for macOS and Linux. Some Windows 11 PCs have Smart App Control switched on, which blocks unsigned apps either way; the <a href="https://github.com/baala3/clipdeck/blob/main/docs/INSTALL.md">install guide</a> explains.</p>
+      </details>
+      <details class="pane" name="faq">
+        <summary>Where are my Clips stored?</summary>
+        <p>On your own computer, in your user folder: <code>%LOCALAPPDATA%\dev.clipdeck.app</code> on Windows, <code>~/Library/Application Support/dev.clipdeck.app</code> on macOS and <code>~/.local/share/dev.clipdeck.app</code> on Linux. There is no account and no cloud sync.</p>
+      </details>
+      <details class="pane" name="faq">
+        <summary>Does it save my passwords?</summary>
+        <p>Password managers mark what they copy as not meant for clipboard tools, and Clipdeck respects that. You can also add any app to the Excluded apps list in Settings, or pause capture from the menu whenever you like.</p>
+      </details>
+      <details class="pane" name="faq">
+        <summary>Why does macOS ask for the Accessibility permission?</summary>
+        <p>Pasting into another app is something macOS only allows with that permission. Until you grant it, choosing a Clip still copies it and you paste with <kbd>&#8984;</kbd> <kbd>V</kbd> yourself.</p>
+      </details>
+      <details class="pane" name="faq">
+        <summary>How do I uninstall it?</summary>
+        <p>On Windows, use "Add or remove programs". On macOS, quit Clipdeck from its menu bar icon and drag it from Applications to the Trash. On Linux, quit it from its menu and delete <code>~/.local/bin/Clipdeck.AppImage</code>. The <a href="https://github.com/baala3/clipdeck/blob/main/docs/INSTALL.md">install guide</a> lists the leftover files you can delete.</p>
+      </details>
+      <details class="pane" name="faq">
+        <summary>Does it work on Wayland?</summary>
+        <p>Not yet. On Linux, Clipdeck needs an X11 session, which most distributions still offer on the login screen, often as "Xorg". Wayland keeps apps from watching the clipboard, setting hotkeys and pasting for you in the ways Clipdeck does all three.</p>
+      </details>
       </div>
     </div>
   </section>
 </main>
 
 <footer>
-  <div class="wrap">
-    <span>Clipdeck is open source under the MIT License.</span>
-    <nav aria-label="Footer">
-      <a href="https://github.com/baala3/clipdeck">Source code</a>
-      <a href="https://github.com/baala3/clipdeck/releases">What's new</a>
-      <a href="https://github.com/baala3/clipdeck/issues">Report a problem</a>
-    </nav>
+  <div class="ft-card dcard">
+    <span class="card-fx" aria-hidden="true"><span class="card-grid"></span><span class="card-glow"></span></span>
+    <div class="ft-top">
+      <div class="ft-brand">
+        <a class="brand" href="./"><img src="icon.svg" alt="" />Clipdeck</a>
+        <p>A small clipboard manager that remembers what you copy and pastes it back from a menu at your cursor.</p>
+        <div class="ft-os"><span class="tag">Windows</span><span class="tag">macOS</span><span class="tag">Linux</span></div>
+      </div>
+      <div class="ft-cols">
+        <nav class="ft-col" aria-label="This page">
+          <h4>Clipdeck</h4>
+          <a href="#features">Features</a>
+          <a href="#how">How it works</a>
+          <a href="#install">Install</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+        <nav class="ft-col" aria-label="Project">
+          <h4>Project</h4>
+          <a href="https://github.com/baala3/clipdeck">Source code</a>
+          <a href="https://github.com/baala3/clipdeck/releases">What's new</a>
+          <a href="https://github.com/baala3/clipdeck/blob/main/docs/INSTALL.md">Install guide</a>
+          <a href="https://github.com/baala3/clipdeck/issues">Report a problem</a>
+        </nav>
+      </div>
+    </div>
+
+    <div class="ft-cta">
+      <div>
+        <strong>One line, and it is running.</strong>
+        <span>Free and open source. No account, no subscription.</span>
+      </div>
+      <a class="btn primary small" href="#install">Install Clipdeck</a>
+    </div>
+
+    <div class="ft-bottom">
+      <span>Clipdeck is open source under the MIT License.</span>
+      <nav aria-label="Footer">
+        <a href="https://github.com/baala3/clipdeck">GitHub</a>
+        <a href="https://github.com/baala3/clipdeck/releases">Releases</a>
+        <a href="https://github.com/baala3/clipdeck/issues">Issues</a>
+      </nav>
+    </div>
   </div>
 </footer>
 
@@ -546,20 +1133,46 @@ const isLinux = /Linux|X11/.test(navigator.platform || navigator.userAgent) && !
 const os = isMac ? 'mac' : isWindows ? 'windows' : isLinux ? 'linux' : null;
 document.querySelector(`.card[data-os="${os}"]`)?.classList.add('suggested');
 
-// The site is light by default; the header button switches to dark and remembers it.
-const themeToggle = document.querySelector('.theme-toggle');
-const labelThemeToggle = () => {
-  const dark = document.documentElement.dataset.theme === 'dark';
-  themeToggle.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
-};
-labelThemeToggle();
-themeToggle.addEventListener('click', () => {
-  const dark = document.documentElement.dataset.theme !== 'dark';
-  if (dark) document.documentElement.dataset.theme = 'dark';
-  else delete document.documentElement.dataset.theme;
-  try { localStorage.setItem('theme', dark ? 'dark' : 'light'); } catch {}
-  labelThemeToggle();
+// The site is light by default; the header switcher changes the theme and remembers it.
+const themes = document.querySelectorAll('.switcher input');
+const currentTheme = document.documentElement.dataset.theme || 'light';
+themes.forEach((radio) => {
+  radio.checked = radio.value === currentTheme;
+  radio.addEventListener('change', () => {
+    if (radio.value === 'light') delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = radio.value;
+    try { localStorage.setItem('theme', radio.value); } catch {}
+  });
 });
+
+// The header pill tightens once the page has scrolled.
+const siteNav = document.querySelector('.site-nav');
+const onScroll = () => siteNav.classList.toggle('scrolled', scrollY > 40);
+onScroll();
+addEventListener('scroll', onScroll, { passive: true });
+
+// Reveal sections as they scroll into view, staggering the ones that arrive together.
+const reveals = document.querySelectorAll('.rv');
+reveals.forEach((el) => {
+  const siblings = [...el.parentElement.children].filter((child) => child.classList.contains('rv'));
+  el.style.setProperty('--d', `${(siblings.indexOf(el) % 3) * 0.1}s`);
+  // Once in, a pane goes back to its quick hover transition.
+  el.addEventListener('transitionend', (event) => {
+    if (event.propertyName === 'translate') el.classList.add('settled');
+  }, { once: true });
+});
+if (document.documentElement.classList.contains('mo') && 'IntersectionObserver' in window) {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      entry.target.classList.add('is-in');
+      observer.unobserve(entry.target);
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -6% 0px' });
+  reveals.forEach((el) => observer.observe(el));
+} else {
+  reveals.forEach((el) => el.classList.add('is-in'));
+}
 
 document.querySelectorAll('.command button').forEach((button) => {
   button.addEventListener('click', async () => {
