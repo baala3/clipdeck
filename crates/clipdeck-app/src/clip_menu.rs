@@ -467,48 +467,95 @@ fn show_popup(app: &AppHandle, kind: MenuKind) {
         previous
     };
 
-    let snap = snapshot(app);
-    let built = build(app, kind, &snap, "m:");
-    let host = app.get_webview_window(MENU_HOST_WINDOW);
-    if let (Ok(built), Some(host)) = (built, host) {
+    let Some(host) = app.get_webview_window(MENU_HOST_WINDOW) else {
+        state.menu_open.store(false, Ordering::SeqCst);
+        return;
+    };
+    #[cfg(windows)]
+    show_popup_until_done(app, kind, &host, previous);
+    #[cfg(not(windows))]
+    if let Ok(built) = build(app, kind, &snapshot(app), "m:") {
         state.menu_targets.lock().unwrap().popup = built.targets;
-
-        #[cfg(windows)]
-        {
-            decorate(
-                app,
-                clip_windows::MenuSlot::Popup,
-                &built.menu,
-                built.tips,
-                built.images,
-                built.clip_rows,
-            );
-            let hook = clip_windows::MenuKeyHook::install(snap.settings.number_shortcut_modifier);
-            if let Err(err) = host.popup_menu(&built.menu) {
-                eprintln!("couldn't show the menu: {err}");
-            }
-            let picked = hook.as_ref().and_then(|hook| hook.picked_digit());
-            drop(hook);
-            clip_windows::clear_menu_tips(clip_windows::MenuSlot::Popup);
-            clip_windows::clear_menu_images(clip_windows::MenuSlot::Popup);
-            clip_windows::clear_menu_actions(clip_windows::MenuSlot::Popup);
-            // Give focus back right away; a chosen item pastes into it afterwards.
-            clip_windows::restore_foreground(previous);
-            let action = state.menu_targets.lock().unwrap().popup_action.take();
-            if let Some((target, action)) = action {
-                // The Enter or click that chose it was in the actions menu.
-                clip_windows::take_activation_modifiers();
-                perform(app, &target, action);
-            } else if let Some(target) = picked.and_then(|digit| built.digits.get(&digit)) {
-                paste(app, target, true);
-            }
-        }
-        #[cfg(not(windows))]
         if let Err(err) = host.popup_menu(&built.menu) {
             eprintln!("couldn't show the menu: {err}");
         }
     }
     state.menu_open.store(false, Ordering::SeqCst);
+}
+
+/// Shows a popup menu and carries out what's chosen in it. Pinning, unpinning
+/// or deleting a Clip from its actions menu isn't what the menu was opened
+/// for, so the menu comes straight back, in the same place, with the change
+/// in it, until the user pastes something or dismisses it.
+#[cfg(windows)]
+fn show_popup_until_done(
+    app: &AppHandle,
+    kind: MenuKind,
+    host: &tauri::WebviewWindow,
+    previous: isize,
+) {
+    let state = app.state::<AppState>();
+    // A native menu can't be changed while it's open, so "staying open"
+    // means opening a fresh one where the first one was.
+    let opened_at = host
+        .hwnd()
+        .ok()
+        .and_then(|hwnd| clip_windows::cursor_in_window(hwnd.0 as isize));
+    let mut reopening = false;
+    loop {
+        let snap = snapshot(app);
+        let Ok(built) = build(app, kind, &snap, "m:") else {
+            break;
+        };
+        state.menu_targets.lock().unwrap().popup = built.targets;
+        decorate(
+            app,
+            clip_windows::MenuSlot::Popup,
+            &built.menu,
+            built.tips,
+            built.images,
+            built.clip_rows,
+        );
+        let hook = clip_windows::MenuKeyHook::install(snap.settings.number_shortcut_modifier);
+        let shown = match opened_at {
+            Some((x, y)) if reopening => {
+                host.popup_menu_at(&built.menu, tauri::PhysicalPosition::new(x, y))
+            }
+            _ => host.popup_menu(&built.menu),
+        };
+        if let Err(err) = shown {
+            eprintln!("couldn't show the menu: {err}");
+        }
+        let picked = hook.as_ref().and_then(|hook| hook.picked_digit());
+        drop(hook);
+        clip_windows::clear_menu_tips(clip_windows::MenuSlot::Popup);
+        clip_windows::clear_menu_images(clip_windows::MenuSlot::Popup);
+        clip_windows::clear_menu_actions(clip_windows::MenuSlot::Popup);
+
+        let action = state.menu_targets.lock().unwrap().popup_action.take();
+        match action {
+            Some((target, action)) => {
+                // The Enter or click that chose it was in the actions menu.
+                clip_windows::take_activation_modifiers();
+                if action != ClipAction::Edit && opened_at.is_some() {
+                    perform(app, &target, action);
+                    reopening = true;
+                    continue;
+                }
+                // Editing happens in the Settings Window, which takes over.
+                clip_windows::restore_foreground(previous);
+                perform(app, &target, action);
+            }
+            None => {
+                // Give focus back right away; a chosen item pastes into it afterwards.
+                clip_windows::restore_foreground(previous);
+                if let Some(target) = picked.and_then(|digit| built.digits.get(&digit)) {
+                    paste(app, target, true);
+                }
+            }
+        }
+        break;
+    }
 }
 
 /// Rebuilds the tray menu so it shows the current Clips and settings. Safe to

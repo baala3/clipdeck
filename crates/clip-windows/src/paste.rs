@@ -1,10 +1,13 @@
 use std::thread;
 use std::time::Duration;
-use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::{HWND, POINT};
+use windows::Win32::Graphics::Gdi::ScreenToClient;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VIRTUAL_KEY,
 };
-use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, SetForegroundWindow};
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetCursorPos, GetForegroundWindow, SetForegroundWindow,
+};
 
 const VK_CONTROL: VIRTUAL_KEY = VIRTUAL_KEY(0x11);
 const VK_V: VIRTUAL_KEY = VIRTUAL_KEY(0x56);
@@ -13,6 +16,19 @@ const VK_V: VIRTUAL_KEY = VIRTUAL_KEY(0x56);
 /// before showing a popup, so the popup itself isn't what gets captured.
 pub fn foreground_window() -> isize {
     unsafe { GetForegroundWindow().0 as isize }
+}
+
+/// Where the mouse cursor is, in pixels from the top left corner of the
+/// window `handle`. That's where a popup menu shown from that window opens,
+/// so keeping it lets the same menu be opened again in the same place.
+pub fn cursor_in_window(handle: isize) -> Option<(i32, i32)> {
+    let mut point = POINT::default();
+    unsafe {
+        GetCursorPos(&mut point).ok()?;
+        ScreenToClient(HWND(handle as *mut core::ffi::c_void), &mut point)
+            .as_bool()
+            .then_some((point.x, point.y))
+    }
 }
 
 /// Gives foreground focus back to `handle` (from `foreground_window`), e.g.
