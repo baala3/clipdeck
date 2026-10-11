@@ -749,13 +749,14 @@ fn perform(app: &AppHandle, target: &Target, action: ClipAction) {
                 }
                 None
             }
-            // A menu can't hold a text box, so editing happens in Settings:
-            // in the pinned item's editor, or for a Clip that isn't pinned,
-            // in a new pinned item that starts with its text.
-            ClipAction::Edit => match (index_in(&engine, List::Pinned), &target.content) {
-                (Some(index), _) => Some(format!("pinned-edit:{index}")),
-                (None, ClipContent::Text(text)) => Some(format!("pinned-draft:{text}")),
-                (None, ClipContent::Image(_)) => None,
+            // A menu can't hold a text box, so editing happens in Settings,
+            // in the editor of the pinned item or of the History Clip itself.
+            ClipAction::Edit => match (target.list, &target.content) {
+                (List::Pinned, _) => {
+                    index_in(&engine, List::Pinned).map(|index| format!("pinned-edit:{index}"))
+                }
+                (List::History, ClipContent::Text(text)) => Some(format!("clip-edit:{text}")),
+                (List::History, ClipContent::Image(_)) => None,
             },
         }
     };

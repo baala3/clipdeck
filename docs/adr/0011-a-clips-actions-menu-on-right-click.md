@@ -25,8 +25,10 @@ The modifier+click shortcuts keep working.
 What each action does:
 
 - **Edit** opens the Settings Window, since a menu can't hold a text box.
-  A pinned item opens in its own editor.
-  A History Clip that isn't pinned opens a new pinned item that starts with its text; saving pins the edited text and leaves the History Clip as it was.
+  A pinned item opens in its own editor in the Pinned section.
+  A History Clip opens in an "Edit Clip" editor of its own, and saving rewrites that Clip where it is in History; a pinned copy of it is a separate item and stays as it was.
+  If the edited text is already another Clip in History, the two become one.
+  At first a History Clip's Edit opened a new pinned item holding its text, which left the Clip unchanged; the user expected Edit to change the Clip itself.
   An image has nothing to edit.
 - **Unpin** takes the item out of Pinned and leaves History alone.
 - **Delete** removes a History Clip from History, where a pinned copy of it stays, and removes a pinned item from both Pinned and History.

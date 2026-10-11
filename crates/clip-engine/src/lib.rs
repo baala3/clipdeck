@@ -90,6 +90,8 @@ pub trait ClipStore {
     fn evict_oldest(&mut self);
     /// Removes the Clip at `index` in chronological order (0 = oldest).
     fn remove(&mut self, index: usize);
+    /// Swaps the Clip at `index` for `clip`, keeping its position.
+    fn replace(&mut self, index: usize, clip: Clip);
     fn len(&self) -> usize;
     fn all(&self) -> Vec<Clip>;
 
@@ -327,6 +329,40 @@ impl<S: ClipStore, P: PinnedStore, I: ImageStore> ClipEngine<S, P, I> {
             }
             None => false,
         }
+    }
+
+    /// Rewrites a History Clip's text where it is, keeping what's known about
+    /// where it was copied. Blank text is rejected, and so is rewriting an
+    /// image. If History already holds the new text in another Clip, that
+    /// one goes, so History never lists the same text twice.
+    pub fn update_history(&mut self, history_index: usize, text: String) -> bool {
+        let clips = self.store.all();
+        let Some(Clip {
+            content: ClipContent::Text(_),
+            source_app,
+        }) = clips.get(history_index).cloned()
+        else {
+            return false;
+        };
+        if text.trim().is_empty() {
+            return false;
+        }
+        let content = ClipContent::Text(text);
+        let duplicate = clips
+            .iter()
+            .enumerate()
+            .position(|(index, clip)| index != history_index && clip.content == content);
+        self.store.replace(
+            history_index,
+            Clip {
+                content,
+                source_app,
+            },
+        );
+        if let Some(duplicate) = duplicate {
+            self.store.remove(duplicate);
+        }
+        true
     }
 
     /// Removes one Clip from History. `history_index` is chronological (0 = oldest).
@@ -576,6 +612,19 @@ impl ClipStore for SqliteClipStore {
                 (index as i64,),
             )
             .expect("failed to remove clip");
+    }
+
+    fn replace(&mut self, index: usize, clip: Clip) {
+        let (text, digest, width, height, bytes, source_app) = clip_row(clip);
+        self.conn
+            .execute(
+                "UPDATE clips
+                 SET text = ?1, image_digest = ?2, image_width = ?3, image_height = ?4,
+                     image_bytes = ?5, source_app = ?6
+                 WHERE id = (SELECT id FROM clips ORDER BY id ASC LIMIT 1 OFFSET ?7)",
+                (text, digest, width, height, bytes, source_app, index as i64),
+            )
+            .expect("failed to replace clip");
     }
 
     fn len(&self) -> usize {

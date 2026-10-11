@@ -113,6 +113,7 @@ fn main() {
             pinned::add_pinned,
             pinned::edit_pinned,
             pinned::remove_pinned,
+            pinned::edit_history_clip,
             updates::check_for_updates
         ])
         .setup(|app| {

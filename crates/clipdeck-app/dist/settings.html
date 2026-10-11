@@ -132,6 +132,12 @@
 </div>
 <div id="action-error" class="banner" role="alert" hidden></div>
 
+<section id="clip-section" hidden>
+  <h2>Edit Clip</h2>
+  <div class="panel" id="clip-editor"></div>
+  <p class="hint">This changes the Clip in History. It keeps its place in the menu.</p>
+</section>
+
 <section>
   <h2>General</h2>
   <div class="panel">
@@ -553,15 +559,16 @@ document.querySelectorAll('.unbind').forEach((button) => {
 // Pinned items: written, edited, and removed here.
 let pinnedItems = [];
 let editing = null; // null, 'new', or the index of the item being edited
-let draft = ''; // what a new item's editor starts with
 
-function pinnedEditor(initial, onSave) {
+// A text box with Save and Cancel. `onSave` gets the text and may reject;
+// `onDone` runs once the editor is finished with, saved or not.
+function textEditor(initial, { label, placeholder, onSave, onDone }) {
   const editor = document.createElement('form');
   editor.className = 'editor';
   const textarea = document.createElement('textarea');
   textarea.value = initial;
-  textarea.placeholder = 'Text to keep in Pinned...';
-  textarea.setAttribute('aria-label', 'Pinned text');
+  textarea.placeholder = placeholder;
+  textarea.setAttribute('aria-label', label);
   const actions = document.createElement('div');
   actions.className = 'editor-actions';
   const hint = document.createElement('span');
@@ -577,7 +584,7 @@ function pinnedEditor(initial, onSave) {
   const sync = () => { save.disabled = !textarea.value.trim(); };
   sync();
   textarea.addEventListener('input', sync);
-  const stop = () => { editing = null; renderPinned(); };
+  const stop = () => onDone(false);
   cancel.addEventListener('click', stop);
   textarea.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -594,8 +601,7 @@ function pinnedEditor(initial, onSave) {
     try {
       await onSave(textarea.value);
       showActionError(null);
-      editing = null;
-      await loadPinned();
+      await onDone(true);
     } catch (err) {
       showActionError(String(err));
     }
@@ -606,12 +612,42 @@ function pinnedEditor(initial, onSave) {
   return editor;
 }
 
+function pinnedEditor(initial, onSave) {
+  return textEditor(initial, {
+    label: 'Pinned text',
+    placeholder: 'Text to keep in Pinned...',
+    onSave,
+    onDone: async (saved) => {
+      editing = null;
+      if (saved) await loadPinned();
+      else renderPinned();
+    },
+  });
+}
+
+// A History Clip's "Edit" in the menu: rewrites that Clip, found again by the
+// text it had, since History can change while the editor is open.
+const clipSection = document.getElementById('clip-section');
+const clipEditor = document.getElementById('clip-editor');
+function editClip(original) {
+  clipEditor.replaceChildren(textEditor(original, {
+    label: 'Clip text',
+    placeholder: 'The Clip\'s text...',
+    onSave: (text) => invoke('edit_history_clip', { original, text }),
+    onDone: () => {
+      clipEditor.replaceChildren();
+      clipSection.hidden = true;
+    },
+  }));
+  clipSection.hidden = false;
+}
+
 function renderPinned() {
   pinnedList.replaceChildren();
   if (editing === 'new') {
     const li = document.createElement('li');
     li.className = 'editing';
-    li.appendChild(pinnedEditor(draft, (text) => invoke('add_pinned', { text })));
+    li.appendChild(pinnedEditor('', (text) => invoke('add_pinned', { text })));
     pinnedList.appendChild(li);
   }
   if (pinnedItems.length === 0 && editing !== 'new') {
@@ -683,7 +719,6 @@ async function loadPinned() {
 }
 
 document.getElementById('pinned-new').addEventListener('click', () => {
-  draft = '';
   editing = 'new';
   renderPinned();
 });
@@ -694,19 +729,20 @@ listen('pinned-changed', () => {
 });
 
 listen('show-section', async (event) => {
-  // "pinned-new" opens an empty editor, "pinned-draft:some text" one that
-  // starts with that text, and "pinned-edit:3" the editor of item 3.
+  // "pinned-new" opens an empty pinned editor, "pinned-edit:3" the editor of
+  // pinned item 3, and "clip-edit:some text" the editor of that History Clip.
   const colon = event.payload.indexOf(':');
   const target = colon < 0 ? event.payload : event.payload.slice(0, colon);
   const detail = colon < 0 ? '' : event.payload.slice(colon + 1);
-  const section = target.startsWith('pinned') ? 'pinned' : target;
-  if (target === 'pinned-new' || target === 'pinned-draft') {
-    draft = detail;
+  const section = target.startsWith('pinned') ? 'pinned' : target.startsWith('clip') ? 'clip' : target;
+  if (target === 'pinned-new') {
     editing = 'new';
     renderPinned();
   } else if (target === 'pinned-edit') {
     editing = Number(detail);
     await loadPinned();
+  } else if (target === 'clip-edit') {
+    editClip(detail);
   }
   document.getElementById(`${section}-section`)?.scrollIntoView({ block: 'start' });
 });

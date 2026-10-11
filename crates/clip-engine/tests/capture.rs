@@ -39,6 +39,12 @@ impl ClipStore for InMemoryStore {
         }
     }
 
+    fn replace(&mut self, index: usize, clip: Clip) {
+        if let Some(slot) = self.clips.get_mut(index) {
+            *slot = clip;
+        }
+    }
+
     fn len(&self) -> usize {
         self.clips.len()
     }
@@ -454,4 +460,101 @@ fn clearing_history_removes_every_clip_but_leaves_pinned_ones() {
 
     assert!(engine.history().is_empty());
     assert_eq!(engine.pinned().len(), 1);
+}
+
+#[test]
+fn editing_a_history_clip_rewrites_it_where_it_is() {
+    let mut engine = ClipEngine::new(
+        InMemoryStore::default(),
+        InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
+        EngineConfig::default(),
+    );
+    for text in ["one", "two", "three"] {
+        engine.capture(text_clip(text));
+    }
+
+    assert!(engine.update_history(1, "two, edited".into()));
+
+    assert_eq!(history_texts(&engine), vec!["one", "two, edited", "three"]);
+    assert_eq!(
+        engine.history()[1].source_app.as_deref(),
+        Some("TextEdit"),
+        "it's still the Clip that was copied there"
+    );
+}
+
+#[test]
+fn a_history_clip_cannot_be_edited_to_nothing_and_a_missing_one_cannot_be_edited() {
+    let mut engine = ClipEngine::new(
+        InMemoryStore::default(),
+        InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
+        EngineConfig::default(),
+    );
+    engine.capture(text_clip("one"));
+
+    assert!(
+        !engine.update_history(0, " \n ".into()),
+        "blank text is rejected"
+    );
+    assert!(
+        !engine.update_history(4, "nope".into()),
+        "out of range does nothing"
+    );
+
+    assert_eq!(history_texts(&engine), vec!["one"]);
+}
+
+#[test]
+fn editing_a_history_clip_into_one_that_is_already_there_leaves_a_single_clip() {
+    let mut engine = ClipEngine::new(
+        InMemoryStore::default(),
+        InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
+        EngineConfig::default(),
+    );
+    for text in ["one", "two", "three"] {
+        engine.capture(text_clip(text));
+    }
+
+    assert!(engine.update_history(2, "one".into()));
+
+    assert_eq!(
+        history_texts(&engine),
+        vec!["two", "one"],
+        "the edited Clip keeps its place and the older copy goes"
+    );
+}
+
+#[test]
+fn an_image_in_history_cannot_be_edited_and_a_pinned_copy_is_left_alone() {
+    let mut store = InMemoryStore::default();
+    store.push(Clip {
+        content: ClipContent::Image(clip_engine::ImageInfo {
+            digest: "abc".into(),
+            width: 10,
+            height: 10,
+            byte_len: 0,
+        }),
+        source_app: None,
+    });
+    let mut engine = ClipEngine::new(
+        store,
+        InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
+        EngineConfig::default(),
+    );
+    engine.capture(text_clip("greeting"));
+    assert!(engine.pin(1));
+
+    assert!(
+        !engine.update_history(0, "text".into()),
+        "an image has no text to rewrite"
+    );
+    assert!(engine.update_history(1, "greeting, edited".into()));
+
+    assert_eq!(history_texts(&engine), vec!["<image>", "greeting, edited"]);
+    let pinned: Vec<ClipContent> = engine.pinned().into_iter().map(|c| c.content).collect();
+    assert_eq!(pinned, vec![ClipContent::Text("greeting".into())]);
 }

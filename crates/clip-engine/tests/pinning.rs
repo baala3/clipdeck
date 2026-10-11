@@ -25,6 +25,12 @@ impl ClipStore for InMemoryStore {
         }
     }
 
+    fn replace(&mut self, index: usize, clip: Clip) {
+        if let Some(slot) = self.clips.get_mut(index) {
+            *slot = clip;
+        }
+    }
+
     fn len(&self) -> usize {
         self.clips.len()
     }
