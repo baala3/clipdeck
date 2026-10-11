@@ -109,6 +109,22 @@ jobs:
       - run: cargo clippy -p clipdeck-app -p ${{ matrix.platform_crate }} --all-targets -- -D warnings
       - run: cargo test -p ${{ matrix.platform_crate }}
 
+      # Linux has no person at a desk to try it on, so the built app is used
+      # for real here, in a headless X11 session.
+      - name: Use the app in an X11 session
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y openbox xdotool xclip imagemagick sqlite3 python3-tk dbus
+          cargo build -p clipdeck-app
+          .github/scripts/linux-e2e.sh target/debug/clipdeck-app
+      - name: Keep the screenshots
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-e2e
+          path: e2e-out
+          if-no-files-found: ignore
+
   gate:
     # The one check main requires. Skipped jobs count as passing, so a PR that
     # touches no code can merge; a failed or cancelled job blocks it.
