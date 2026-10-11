@@ -126,10 +126,11 @@ fn snapshot(app: &AppHandle) -> Snapshot {
 struct BuiltMenu {
     menu: Menu<Wry>,
     targets: HashMap<String, Target>,
-    /// Number shortcut digit -> target, for the first ten items. Only Windows
-    /// needs it: a digit pressed in an open menu there is caught by a keyboard
-    /// hook, while macOS delivers it as a click on the item's accelerator.
-    #[cfg(windows)]
+    /// Number shortcut digit -> target, for the first ten items. Windows and
+    /// Linux need it: a digit pressed in an open menu there is caught by hand
+    /// (a keyboard hook, a GTK key handler), while macOS delivers it as a
+    /// click on the item's accelerator.
+    #[cfg(not(target_os = "macos"))]
     digits: HashMap<char, Target>,
     /// What hovering each row shows. Only Windows can show it (see ADR-0008).
     #[cfg_attr(not(windows), allow(dead_code))]
@@ -171,7 +172,7 @@ fn build(
         tips: Vec::new(),
     };
     let mut built_targets = HashMap::new();
-    #[cfg(windows)]
+    #[cfg(not(target_os = "macos"))]
     let mut digits = HashMap::new();
     #[cfg(windows)]
     let mut images = Vec::new();
@@ -213,7 +214,7 @@ fn build(
             let accelerator = model
                 .shortcut_digit
                 .and_then(|digit| accelerator(number_modifier, digit));
-            #[cfg(windows)]
+            #[cfg(not(target_os = "macos"))]
             if accelerator.is_some() {
                 digits.insert(model.shortcut_digit.unwrap(), target.clone());
             }
@@ -392,7 +393,7 @@ fn build(
     Ok(BuiltMenu {
         menu,
         targets: built_targets,
-        #[cfg(windows)]
+        #[cfg(not(target_os = "macos"))]
         digits,
         tips,
         #[cfg(windows)]
@@ -503,12 +504,73 @@ fn show_popup(app: &AppHandle, kind: MenuKind) {
                 paste(app, target, true);
             }
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
         if let Err(err) = host.popup_menu(&built.menu) {
             eprintln!("couldn't show the menu: {err}");
         }
+        #[cfg(target_os = "linux")]
+        {
+            let picked = std::rc::Rc::new(std::cell::Cell::new(None));
+            watch_number_keys(snap.settings.number_shortcut_modifier, picked.clone());
+            // Returns once the menu has closed.
+            if let Err(err) = host.popup_menu(&built.menu) {
+                eprintln!("couldn't show the menu: {err}");
+            }
+            if let Some(target) = picked.take().and_then(|digit| built.digits.get(&digit)) {
+                paste(app, target, true);
+            }
+        }
     }
     state.menu_open.store(false, Ordering::SeqCst);
+}
+
+/// Makes the number shortcut work in the popup menu that's about to open.
+/// A GTK popup menu neither shows accelerators nor acts on them, so its key
+/// presses are watched instead: the shortcut closes the menu and leaves its
+/// digit in `picked`.
+#[cfg(target_os = "linux")]
+fn watch_number_keys(
+    modifier: ShortcutModifier,
+    picked: std::rc::Rc<std::cell::Cell<Option<char>>>,
+) {
+    use gtk::gdk::ModifierType;
+    use gtk::glib::Propagation;
+    use gtk::prelude::*;
+    // Runs as soon as the menu is up; showing it keeps the event loop turning.
+    gtk::glib::idle_add_local_once(move || {
+        // Tauri doesn't hand out the GTK menu, but an open one is a window.
+        let open_menus = gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|window| {
+                let menu = window.downcast::<gtk::Window>().ok()?.child()?;
+                menu.downcast::<gtk::Menu>()
+                    .ok()
+                    .filter(|menu| menu.is_visible())
+            });
+        for menu in open_menus {
+            let picked = picked.clone();
+            menu.connect_key_press_event(move |menu, key| {
+                // The number row by key position, so Shift+2 still means 2.
+                let digit = match key.hardware_keycode() {
+                    code @ 10..=18 => (b'1' + (code - 10) as u8) as char,
+                    19 => '0',
+                    _ => return Propagation::Proceed,
+                };
+                let state = key.state();
+                let held = HeldModifiers {
+                    command_or_control: state.contains(ModifierType::CONTROL_MASK),
+                    alt: state.contains(ModifierType::MOD1_MASK),
+                    shift: state.contains(ModifierType::SHIFT_MASK),
+                };
+                if !modifier.is_held(held) {
+                    return Propagation::Proceed;
+                }
+                picked.set(Some(digit));
+                menu.cancel();
+                Propagation::Stop
+            });
+        }
+    });
 }
 
 /// Rebuilds the tray menu so it shows the current Clips and settings. Safe to
@@ -688,8 +750,8 @@ fn activation_modifiers() -> HeldModifiers {
     return clip_windows::take_activation_modifiers();
     #[cfg(target_os = "macos")]
     return clip_macos::held_modifiers();
-    #[cfg(not(any(windows, target_os = "macos")))]
-    HeldModifiers::default()
+    #[cfg(target_os = "linux")]
+    return clip_linux::held_modifiers();
 }
 
 /// A plain click pastes; with the delete or pin modifier held (Clipy's beta
@@ -787,7 +849,7 @@ fn with_target_index(
 /// pastes it (ADR-0005). Windows pastes into the app that was focused before
 /// the popup; from the tray there's no such app (the taskbar has focus), so it
 /// only copies. On macOS a menu never takes focus, so either menu pastes into
-/// the frontmost app.
+/// the frontmost app; on Linux focus goes back to the app when the menu closes.
 fn paste(app: &AppHandle, target: &Target, paste_into_previous: bool) {
     if let Err(err) = copy(app, &target.content) {
         eprintln!("couldn't write the clipboard: {err}");
@@ -809,6 +871,15 @@ fn paste(app: &AppHandle, target: &Target, paste_into_previous: bool) {
     if !clip_macos::paste_into_frontmost_app() {
         eprintln!("copied only: Clipdeck needs the Accessibility permission to paste");
     }
+    // A menu holds the keyboard while it's open, and its item is chosen just
+    // before it lets go, so the keys wait a moment for the app underneath.
+    #[cfg(target_os = "linux")]
+    std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        if !clip_linux::paste_into_focused_app() {
+            eprintln!("copied only: couldn't send the paste keys");
+        }
+    });
 }
 
 fn copy(app: &AppHandle, content: &ClipContent) -> Result<(), String> {

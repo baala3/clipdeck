@@ -93,7 +93,38 @@ fn store_path(app: &tauri::App, file_name: &str) -> PathBuf {
     })
 }
 
+/// Whether this login session is a Wayland one, where Clipdeck can't do its
+/// job yet: it reaches the clipboard, the hotkeys, and the keyboard through
+/// the X server, and under Wayland that only covers the few apps still
+/// running on X11 (see docs/research/linux-support.md).
+#[cfg(target_os = "linux")]
+fn on_wayland() -> bool {
+    std::env::var("XDG_SESSION_TYPE").is_ok_and(|session| session == "wayland")
+}
+
+/// Says why Clipdeck can't run here, then quits.
+#[cfg(target_os = "linux")]
+fn refuse_wayland(app: &tauri::AppHandle) {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+    let handle = app.clone();
+    app.dialog()
+        .message(
+            "Clipdeck doesn't work on Wayland yet.\n\n\
+             To use it, log out and pick an X11 session (often called \"Xorg\") on the login screen.",
+        )
+        .title("Clipdeck")
+        .kind(MessageDialogKind::Error)
+        .show(move |_| handle.exit(1));
+}
+
 fn main() {
+    // Clipdeck talks to the X server itself, so its windows and menus must
+    // be on that same server rather than on a Wayland compositor.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("GDK_BACKEND").is_none() {
+        std::env::set_var("GDK_BACKEND", "x11");
+    }
+
     tauri::Builder::default()
         // Must be the first plugin. A second Clipdeck would capture every copy
         // twice and fight this one for the hotkeys, so it hands over and exits;
@@ -120,6 +151,12 @@ fn main() {
             // A menu bar app: no Dock icon or app menu, just the tray icon.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+            #[cfg(target_os = "linux")]
+            if on_wayland() {
+                refuse_wayland(app.handle());
+                return Ok(());
+            }
 
             let settings_state = SettingsState::load(settings::settings_file_path(app));
             let store = SqliteClipStore::open(store_path(app, "clipdeck-history.sqlite3"));
@@ -162,6 +199,11 @@ fn main() {
             );
             #[cfg(target_os = "macos")]
             spawn_capture_thread(app.handle().clone(), clip_macos::MacClipboardSource::new());
+            #[cfg(target_os = "linux")]
+            match clip_linux::X11ClipboardSource::connect(None) {
+                Ok(source) => spawn_capture_thread(app.handle().clone(), source),
+                Err(err) => eprintln!("can't watch the clipboard: {err}"),
+            }
 
             // Like Clipy, clicking the tray icon shows the full menu.
             // The tray gets its own simplified icon, drawn to stay legible at 16px.
@@ -174,7 +216,15 @@ fn main() {
             app.handle().plugin(
                 tauri_plugin_global_shortcut::Builder::new()
                     .with_handler(|app, shortcut, event| {
-                        if event.state() != ShortcutState::Pressed {
+                        // On X11 a pressed hotkey holds the keyboard until its
+                        // key is let go, and a menu can't open without the
+                        // keyboard, so there the hotkey acts on release.
+                        let trigger = if cfg!(target_os = "linux") {
+                            ShortcutState::Released
+                        } else {
+                            ShortcutState::Pressed
+                        };
+                        if event.state() != trigger {
                             return;
                         }
                         let action = app

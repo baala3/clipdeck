@@ -21,8 +21,15 @@ pub struct UpdateState {
     declined: Mutex<Option<String>>,
 }
 
+/// Whether this copy can replace itself with a newer one. On Linux only an
+/// AppImage can, which is what the install command installs; a copy built
+/// from source has nothing to swap.
+fn can_update_itself() -> bool {
+    !cfg!(target_os = "linux") || std::env::var_os("APPIMAGE").is_some()
+}
+
 pub fn spawn_background_checks(app: AppHandle) {
-    if cfg!(debug_assertions) {
+    if cfg!(debug_assertions) || !can_update_itself() {
         return;
     }
     std::thread::spawn(move || {
@@ -39,6 +46,12 @@ pub fn spawn_background_checks(app: AppHandle) {
 /// What a check from the Settings Window found, shown next to its button.
 #[tauri::command]
 pub async fn check_for_updates(app: AppHandle) -> Result<String, String> {
+    if !can_update_itself() {
+        return Err(
+            "This copy of Clipdeck can't update itself. Run the install command again to get the latest version."
+                .into(),
+        );
+    }
     match check(&app, true).await? {
         Outcome::UpToDate => Ok(format!(
             "Clipdeck {} is the latest version.",
