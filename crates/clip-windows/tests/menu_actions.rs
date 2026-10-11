@@ -160,10 +160,10 @@ unsafe fn run(steps: Step) -> Outcome {
         MenuSlot::Popup,
         menu.0 as isize,
         vec![
-            actions(1, None, &["Paste", "Pin", "Delete"]),
-            actions(2, None, &["Paste", "Delete"]),
-            actions(3, Some(0), &["Paste", "Pin", "Delete"]),
-            actions(3, Some(1), &["Paste", "Pin", "Delete"]),
+            actions(1, None, &["Edit", "Pin", "Delete"]),
+            actions(2, None, &["Pin", "Delete"]),
+            actions(3, Some(0), &["Edit", "Pin", "Delete"]),
+            actions(3, Some(1), &["Edit", "Pin", "Delete"]),
         ],
     );
     let picked = Rc::new(RefCell::new(Vec::new()));
@@ -230,7 +230,7 @@ fn the_right_arrow_on_a_clip_opens_its_actions_and_left_goes_back() {
 
     assert_eq!(
         outcome.seen[1],
-        vec![labels(&CLIPS), labels(&["Paste", "Pin", "Delete"])],
+        vec![labels(&CLIPS), labels(&["Edit", "Pin", "Delete"])],
         "the actions menu opens on top of the Clips' menu"
     );
     assert_eq!(
@@ -282,7 +282,7 @@ fn the_right_arrow_opens_a_folder_first_and_then_the_actions_of_a_clip_inside_it
     );
     assert_eq!(
         outcome.seen[2].last(),
-        Some(&labels(&["Paste", "Pin", "Delete"]))
+        Some(&labels(&["Edit", "Pin", "Delete"]))
     );
     assert_eq!(
         outcome.picked,
@@ -325,7 +325,7 @@ fn right_clicking_a_clip_opens_its_actions_and_other_rows_ignore_it() {
     );
     assert_eq!(
         outcome.seen[2],
-        vec![labels(&CLIPS), labels(&["Paste", "Delete"])]
+        vec![labels(&CLIPS), labels(&["Pin", "Delete"])]
     );
     assert_eq!(
         outcome.picked,

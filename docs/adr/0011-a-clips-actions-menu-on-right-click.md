@@ -12,16 +12,25 @@ Right-clicking a Clip, or pressing the Right arrow on it, opens a small actions 
 
 | Clip | Actions |
 | --- | --- |
-| In History | Paste, Pin, Delete |
-| In History, already pinned | Paste, Delete |
-| Pinned text | Paste, Edit, Remove |
-| Pinned image | Paste, Remove |
+| Text in History | Edit, Pin, Delete |
+| Image in History | Pin, Delete |
+| Pinned text | Unpin, Edit, Delete |
+| Pinned image | Unpin, Delete |
 
-A plain click or Enter pastes in one step, as before, and the tooltip stays.
+A History Clip that is pinned already offers Unpin in place of Pin.
+Paste is not among them: a plain click or Enter on the Clip pastes in one step, as before, and the tooltip stays.
 Dismissing the actions menu with Escape or the Left arrow goes back to the Clips, like leaving a submenu.
 The modifier+click shortcuts keep working.
-"Edit" opens the Settings Window with that item's editor open, since a menu can't hold a text box.
-From the tray menu on Windows "Paste" reads "Copy", because choosing a Clip there only copies it (ADR-0006).
+
+What each action does:
+
+- **Edit** opens the Settings Window, since a menu can't hold a text box.
+  A pinned item opens in its own editor.
+  A History Clip that isn't pinned opens a new pinned item that starts with its text; saving pins the edited text and leaves the History Clip as it was.
+  An image has nothing to edit.
+- **Unpin** takes the item out of Pinned and leaves History alone.
+- **Delete** removes a History Clip from History, where a pinned copy of it stays, and removes a pinned item from both Pinned and History.
+  The delete modifier+click does the same, so on a pinned item it now clears History's copy too, where it used to only unpin.
 
 Which actions a Clip offers, and what they're called, is decided in `clip-engine` (`menu::history_clip_actions`, `menu::pinned_clip_actions`), so it is tested without a GUI.
 

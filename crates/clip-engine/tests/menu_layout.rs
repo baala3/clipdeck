@@ -232,51 +232,59 @@ fn an_image_is_titled_by_its_size_and_has_no_tooltip() {
     );
 }
 
-#[test]
-fn a_history_clip_can_be_pasted_pinned_or_deleted_from_its_actions_menu() {
-    use ClipAction::*;
-
-    assert_eq!(history_clip_actions(false), vec![Paste, Pin, Delete]);
-    assert_eq!(
-        history_clip_actions(true),
-        vec![Paste, Delete],
-        "pinning it again would do nothing"
-    );
-}
-
-#[test]
-fn a_pinned_item_can_be_pasted_edited_or_removed_but_an_image_has_nothing_to_edit() {
-    use ClipAction::*;
-    let image = ClipContent::Image(ImageInfo {
+fn image() -> ClipContent {
+    ClipContent::Image(ImageInfo {
         digest: "abc".into(),
         width: 10,
         height: 10,
         byte_len: 0,
-    });
-
-    assert_eq!(
-        pinned_clip_actions(&ClipContent::Text("hi".into())),
-        vec![Paste, Edit, Delete]
-    );
-    assert_eq!(pinned_clip_actions(&image), vec![Paste, Delete]);
+    })
 }
 
 #[test]
-fn an_action_is_named_for_what_it_does_where_it_is_shown() {
+fn a_history_clip_can_be_edited_pinned_or_deleted_from_its_actions_menu() {
+    use ClipAction::*;
+    let text = ClipContent::Text("hi".into());
+
+    assert_eq!(history_clip_actions(&text, false), vec![Edit, Pin, Delete]);
+    assert_eq!(
+        history_clip_actions(&text, true),
+        vec![Edit, Unpin, Delete],
+        "one that's pinned already can be unpinned from History too"
+    );
+    assert_eq!(
+        history_clip_actions(&image(), false),
+        vec![Pin, Delete],
+        "an image has nothing to edit"
+    );
+    assert_eq!(history_clip_actions(&image(), true), vec![Unpin, Delete]);
+}
+
+#[test]
+fn a_pinned_item_can_be_unpinned_edited_or_deleted_from_its_actions_menu() {
     use ClipAction::*;
 
-    assert_eq!(Paste.label(false, true), "Paste");
     assert_eq!(
-        Paste.label(false, false),
-        "Copy",
-        "where choosing a Clip can't paste"
+        pinned_clip_actions(&ClipContent::Text("hi".into())),
+        vec![Unpin, Edit, Delete]
     );
-    assert_eq!(Delete.label(false, true), "Delete");
     assert_eq!(
-        Delete.label(true, true),
-        "Remove",
-        "as in the Settings Window"
+        pinned_clip_actions(&image()),
+        vec![Unpin, Delete],
+        "an image has nothing to edit"
     );
-    assert_eq!(Pin.label(false, true), "Pin");
-    assert_eq!(Edit.label(true, true), "Edit");
+}
+
+#[test]
+fn pasting_is_not_an_action_since_choosing_the_clip_does_that() {
+    let offered: Vec<&str> = history_clip_actions(&ClipContent::Text("hi".into()), false)
+        .into_iter()
+        .chain(pinned_clip_actions(&ClipContent::Text("hi".into())))
+        .map(ClipAction::label)
+        .collect();
+
+    assert_eq!(
+        offered,
+        vec!["Edit", "Pin", "Delete", "Unpin", "Edit", "Delete"]
+    );
 }

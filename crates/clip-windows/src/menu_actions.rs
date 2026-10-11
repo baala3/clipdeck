@@ -1,6 +1,6 @@
 //! A Clip's actions menu: right-clicking a Clip in one of Clipdeck's native
 //! menus, or pressing the Right arrow on it, opens a small menu beside it
-//! (Paste, Pin, Delete...), while a plain click still pastes in one step.
+//! (Edit, Pin, Delete...), while a plain click still pastes in one step.
 //!
 //! Win32 tells a menu's owner window about a right-click with
 //! `WM_MENURBUTTONUP`, but that window belongs to Tauri (popups) or to the

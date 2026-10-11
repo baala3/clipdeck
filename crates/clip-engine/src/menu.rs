@@ -144,46 +144,51 @@ pub fn layout(clips: &[ClipContent], options: &MenuLayout) -> Vec<MenuEntry> {
 }
 
 /// Something a Clip's actions menu offers: the menu that opens beside a Clip
-/// on a right-click or the Right arrow (ADR-0011).
+/// on a right-click or the Right arrow (ADR-0011). Pasting isn't one of them;
+/// that's what choosing the Clip itself does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClipAction {
-    Paste,
-    Pin,
+    /// Opens the editor of the Clip's pinned item, or for a History Clip that
+    /// isn't pinned, a new pinned item that starts with its text.
     Edit,
+    Pin,
+    /// Takes the Clip out of Pinned and leaves History as it is.
+    Unpin,
+    /// Removes a History Clip from History, and a pinned item from both lists.
     Delete,
 }
 
 impl ClipAction {
-    /// What the actions menu calls it. `pinned` says which list the Clip is
-    /// in; `pastes` is false where choosing a Clip only copies it (the tray
-    /// menu on Windows).
-    pub fn label(self, pinned: bool, pastes: bool) -> &'static str {
+    /// What the actions menu calls it.
+    pub fn label(self) -> &'static str {
         match self {
-            ClipAction::Paste if pastes => "Paste",
-            ClipAction::Paste => "Copy",
-            ClipAction::Pin => "Pin",
             ClipAction::Edit => "Edit",
-            ClipAction::Delete if pinned => "Remove",
+            ClipAction::Pin => "Pin",
+            ClipAction::Unpin => "Unpin",
             ClipAction::Delete => "Delete",
         }
     }
 }
 
 /// The actions a History Clip offers, in menu order. One that's pinned
-/// already has no Pin, since pinning it again would do nothing.
-pub fn history_clip_actions(already_pinned: bool) -> Vec<ClipAction> {
-    if already_pinned {
-        vec![ClipAction::Paste, ClipAction::Delete]
+/// already offers Unpin in place of Pin, and only text can be edited.
+pub fn history_clip_actions(content: &ClipContent, already_pinned: bool) -> Vec<ClipAction> {
+    let pin = if already_pinned {
+        ClipAction::Unpin
     } else {
-        vec![ClipAction::Paste, ClipAction::Pin, ClipAction::Delete]
+        ClipAction::Pin
+    };
+    match content {
+        ClipContent::Text(_) => vec![ClipAction::Edit, pin, ClipAction::Delete],
+        ClipContent::Image(_) => vec![pin, ClipAction::Delete],
     }
 }
 
 /// The actions a pinned item offers, in menu order. Only text can be edited.
 pub fn pinned_clip_actions(content: &ClipContent) -> Vec<ClipAction> {
     match content {
-        ClipContent::Text(_) => vec![ClipAction::Paste, ClipAction::Edit, ClipAction::Delete],
-        ClipContent::Image(_) => vec![ClipAction::Paste, ClipAction::Delete],
+        ClipContent::Text(_) => vec![ClipAction::Unpin, ClipAction::Edit, ClipAction::Delete],
+        ClipContent::Image(_) => vec![ClipAction::Unpin, ClipAction::Delete],
     }
 }
 

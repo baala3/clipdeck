@@ -254,7 +254,7 @@ fn build(
                     });
                 }
                 let actions = match list {
-                    List::History => history_clip_actions(snap.pinned.contains(content)),
+                    List::History => history_clip_actions(content, snap.pinned.contains(content)),
                     List::Pinned => pinned_clip_actions(content),
                 };
                 let target = Target {
@@ -482,7 +482,7 @@ fn show_popup(app: &AppHandle, kind: MenuKind) {
             if let Some((target, action)) = action {
                 // The Enter or click that chose it was in the actions menu.
                 clip_windows::take_activation_modifiers();
-                perform(app, &target, action, true);
+                perform(app, &target, action);
             } else if let Some(target) = picked.and_then(|digit| built.digits.get(&digit)) {
                 paste(app, target, true);
             }
@@ -556,18 +556,13 @@ fn decorate(
     if let Ok(hmenu) = menu.hpopupmenu() {
         clip_windows::set_menu_tips(slot, hmenu, tips);
         clip_windows::set_menu_images(slot, hmenu, images);
-        // From the tray there's no app to paste into, so choosing only copies.
-        let pastes = slot == clip_windows::MenuSlot::Popup;
         let actions = clip_rows
             .iter()
             .map(
-                |(&(row, folder_row), (target, actions))| clip_windows::MenuRowActions {
+                |(&(row, folder_row), (_, actions))| clip_windows::MenuRowActions {
                     row,
                     folder_row,
-                    labels: actions
-                        .iter()
-                        .map(|action| action.label(target.list == List::Pinned, pastes).into())
-                        .collect(),
+                    labels: actions.iter().map(|action| action.label().into()).collect(),
                 },
             )
             .collect();
@@ -634,8 +629,7 @@ pub fn watch_menu_actions(app: &AppHandle) {
                 let app = app.clone();
                 std::thread::spawn(move || {
                     let handle = app.clone();
-                    let _ =
-                        app.run_on_main_thread(move || perform(&handle, &target, action, false));
+                    let _ = app.run_on_main_thread(move || perform(&handle, &target, action));
                 });
             }
         }
@@ -689,43 +683,67 @@ fn activate(app: &AppHandle, target: &Target, held: HeldModifiers, paste_into_pr
         .lock()
         .unwrap()
         .clone();
-    let action = if settings.delete_modifier.is_held(held) {
-        ClipAction::Delete
+    if settings.delete_modifier.is_held(held) {
+        perform(app, target, ClipAction::Delete);
     } else if target.list == List::History && settings.pin_modifier.is_held(held) {
-        ClipAction::Pin
+        perform(app, target, ClipAction::Pin);
     } else {
-        ClipAction::Paste
-    };
-    perform(app, target, action, paste_into_previous);
+        paste(app, target, paste_into_previous);
+    }
 }
 
-/// Carries out `action` on the target, however it was asked for: a click, a
-/// modifier+click, or the Clip's actions menu.
-fn perform(app: &AppHandle, target: &Target, action: ClipAction, paste_into_previous: bool) {
-    match action {
-        ClipAction::Paste => paste(app, target, paste_into_previous),
-        ClipAction::Pin => {
-            with_target_index(app, target, |engine, _, index| engine.pin(index));
-            refresh_tray_menu(app);
-        }
-        ClipAction::Delete => {
-            with_target_index(app, target, |engine, list, index| match list {
-                List::History => engine.delete(index),
-                List::Pinned => engine.unpin(index),
-            });
-            refresh_tray_menu(app);
-        }
-        // A menu can't hold a text box, so editing happens in Settings.
-        ClipAction::Edit => {
-            let mut pinned_index = None;
-            with_target_index(app, target, |_, _, index| {
-                pinned_index = Some(index);
-                true
-            });
-            if let Some(index) = pinned_index {
-                settings::show_settings_window_at(app, Some(&format!("pinned-edit:{index}")));
+/// Carries out `action` on the target, whether it was asked for with a
+/// modifier+click or from the Clip's actions menu.
+fn perform(app: &AppHandle, target: &Target, action: ClipAction) {
+    let state = app.state::<AppState>();
+    let editor = {
+        let mut engine = state.engine.lock().unwrap();
+        let index_in = |engine: &crate::Engine, list: List| {
+            let clips = match list {
+                List::History => engine.history(),
+                List::Pinned => engine.pinned(),
+            };
+            clips.iter().position(|clip| clip.content == target.content)
+        };
+        match action {
+            ClipAction::Pin => {
+                if let Some(index) = index_in(&engine, List::History) {
+                    engine.pin(index);
+                }
+                None
             }
+            ClipAction::Unpin => {
+                if let Some(index) = index_in(&engine, List::Pinned) {
+                    engine.unpin(index);
+                }
+                None
+            }
+            // A History Clip goes from History and stays pinned if it was; a
+            // pinned item goes from both lists.
+            ClipAction::Delete => {
+                if target.list == List::Pinned {
+                    if let Some(index) = index_in(&engine, List::Pinned) {
+                        engine.unpin(index);
+                    }
+                }
+                if let Some(index) = index_in(&engine, List::History) {
+                    engine.delete(index);
+                }
+                None
+            }
+            // A menu can't hold a text box, so editing happens in Settings:
+            // in the pinned item's editor, or for a Clip that isn't pinned,
+            // in a new pinned item that starts with its text.
+            ClipAction::Edit => match (index_in(&engine, List::Pinned), &target.content) {
+                (Some(index), _) => Some(format!("pinned-edit:{index}")),
+                (None, ClipContent::Text(text)) => Some(format!("pinned-draft:{text}")),
+                (None, ClipContent::Image(_)) => None,
+            },
         }
+    };
+    match editor {
+        Some(section) => settings::show_settings_window_at(app, Some(&section)),
+        None => refresh_tray_menu(app),
     }
 }
 
