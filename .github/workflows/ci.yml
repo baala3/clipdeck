@@ -117,20 +117,6 @@ jobs:
           sudo apt-get install -y openbox xdotool xclip imagemagick sqlite3 python3-tk dbus
           cargo build -p clipdeck-app
           .github/scripts/linux-e2e.sh target/debug/clipdeck-app
-      # TEMPORARY, to be removed before merging: checks the real AppImage and
-      # the install command once. CI doesn't build installers as a rule.
-      - name: TEMPORARY - try the AppImage and install.sh
-        if: runner.os == 'Linux'
-        run: |
-          (cd crates/clipdeck-app && npx --yes @tauri-apps/cli@2.12.1 build --bundles appimage --config '{"bundle":{"createUpdaterArtifacts":false}}')
-          appimage=$(ls "$PWD"/target/release/bundle/appimage/*.AppImage)
-          ls -la "$appimage"
-          OUT=$PWD/e2e-out/appimage .github/scripts/linux-e2e.sh "$appimage" || echo "::warning::AppImage end-to-end run failed"
-          echo "=== install.sh"
-          export HOME=$(mktemp -d)
-          Xvfb :78 -screen 0 1280x800x24 > /dev/null 2>&1 &
-          sleep 1
-          DISPLAY=:78 CLIPDECK_APPIMAGE_URL="file://$appimage" dbus-run-session -- sh -c 'sh install.sh; sleep 10; pgrep -a -x clipdeck-app; echo "--- files"; find "$HOME/.local" "$HOME/.config" -maxdepth 3 -not -path "*/EBWebView/*" | head -40; echo "--- launcher"; cat "$HOME/.local/share/applications/clipdeck.desktop"; echo "--- autostart"; cat "$HOME"/.config/autostart/*.desktop; echo "--- again"; sh install.sh; sleep 6; pgrep -a -x clipdeck-app; pkill -x clipdeck-app'
       - name: Keep the screenshots
         if: always() && runner.os == 'Linux'
         uses: actions/upload-artifact@v4
