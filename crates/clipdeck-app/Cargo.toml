@@ -28,3 +28,5 @@ clip-macos = { path = "../clip-macos" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 clip-linux = { path = "../clip-linux" }
+# The same GTK that Tauri uses, for the number shortcuts in popup menus.
+gtk = "0.18"

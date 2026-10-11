@@ -8,6 +8,11 @@
 # Needs: xvfb openbox xdotool xclip imagemagick sqlite3 python3-tk dbus.
 set -u
 
+# One session bus for everything here: a second Clipdeck finds the first over it.
+if [ -z "${CLIPDECK_E2E_BUS:-}" ]; then
+  CLIPDECK_E2E_BUS=1 exec dbus-run-session -- "$0" "$@"
+fi
+
 app=$(realpath "$1")
 OUT=${OUT:-$PWD/e2e-out}
 mkdir -p "$OUT"
@@ -56,7 +61,7 @@ PY
 python3 "$work/target.py" "$work/pasted.txt" &
 sleep 2
 
-dbus-run-session -- "$app" > "$OUT/app.log" 2>&1 &
+"$app" > "$OUT/app.log" 2>&1 &
 sleep 8
 check "the app is running" pgrep -f "$app"
 shot 1-started
@@ -121,12 +126,12 @@ hotkey ctrl+shift+v
 xdotool key ctrl+2
 sleep 2
 shot 7-after-ctrl-2
-# Not a failure yet: GTK may not honor accelerators inside a popup menu.
-if [ "$(newest)" = "second clip" ]; then echo "note  Ctrl+2 picks the second Clip"; else echo "note  Ctrl+2 does NOT pick a Clip (History top: $(newest))"; xdotool key Escape; fi
+check "Ctrl+2 picks the second Clip" test "$(newest)" = "second clip"
+check "and pastes it" test "$(cat "$work/pasted.txt")" = "second clipsecond clip"
 
 echo "--- settings"
 # Starting Clipdeck again hands over to the running one, which shows Settings.
-dbus-run-session -- "$app" > /dev/null 2>&1 &
+"$app" > /dev/null 2>&1 &
 sleep 6
 shot 8-settings
 check "a second start shows the Settings window" sh -c 'xdotool search --onlyvisible --name "Clipdeck Settings" | grep -q .'
