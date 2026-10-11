@@ -48,8 +48,10 @@ pub enum MenuEntry {
 pub enum MenuTip {
     None,
     Text(String),
-    /// A submenu, with a tooltip (or none) for each of its rows.
-    Folder(Vec<Option<String>>),
+    /// An image Clip, by its digest: a larger look at it than its thumbnail.
+    Image(String),
+    /// A submenu, with what hovering each of its rows shows.
+    Folder(Vec<MenuTip>),
 }
 
 /// The first non-blank line of `text`, cut to `max_length` characters with a

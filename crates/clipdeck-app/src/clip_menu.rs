@@ -267,7 +267,7 @@ fn build(
                 MenuEntry::Item(model) => {
                     #[cfg(windows)]
                     clip_row(&model, None);
-                    let tip = model.tooltip.clone().map_or(MenuTip::None, MenuTip::Text);
+                    let tip = tip(&model, &clips[model.position]);
                     rows.push(item(&model)?.as_ref(), tip)?;
                 }
                 MenuEntry::Folder { title, items } => {
@@ -281,7 +281,12 @@ fn build(
                         built.iter().map(|item| item.as_ref()).collect();
                     rows.push(
                         &Submenu::with_items(app, title, true, &refs)?,
-                        MenuTip::Folder(items.into_iter().map(|model| model.tooltip).collect()),
+                        MenuTip::Folder(
+                            items
+                                .iter()
+                                .map(|model| tip(model, &clips[model.position]))
+                                .collect(),
+                        ),
                     )?;
                 }
             }
@@ -379,6 +384,15 @@ fn build(
         #[cfg(windows)]
         clip_rows,
     })
+}
+
+/// What resting on a Clip's row shows: an image in full, or all of a text
+/// whose label was shortened.
+fn tip(model: &MenuItemModel, content: &ClipContent) -> MenuTip {
+    match content {
+        ClipContent::Image(image) => MenuTip::Image(image.digest.clone()),
+        ClipContent::Text(_) => model.tooltip.clone().map_or(MenuTip::None, MenuTip::Text),
+    }
 }
 
 /// The thumbnail to show beside `content` in a menu, if it's an image.
@@ -568,6 +582,29 @@ fn decorate(
             targets.popup_action = None;
         }
     }
+}
+
+/// Lets the menus show an image Clip in full when its row is rested on. Call
+/// it once, on the main thread.
+#[cfg(windows)]
+pub fn provide_image_previews(app: &AppHandle) {
+    let app = app.clone();
+    clip_windows::on_image_preview(move |digest| {
+        let png = {
+            let state = app.state::<AppState>();
+            let engine = state.engine.lock().unwrap();
+            let image = engine
+                .history()
+                .into_iter()
+                .chain(engine.pinned())
+                .find_map(|clip| match clip.content {
+                    ClipContent::Image(image) if image.digest == digest => Some(image),
+                    _ => None,
+                })?;
+            engine.image_png(&image)?
+        };
+        Rgba::from_png(&png)
+    });
 }
 
 /// Starts carrying out what's chosen from a Clip's actions menu. Call it

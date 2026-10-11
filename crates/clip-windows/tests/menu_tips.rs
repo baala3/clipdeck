@@ -145,7 +145,7 @@ fn resting_on_a_shortened_item_shows_the_whole_clip_beside_the_menu() {
                 MenuTip::None,
                 MenuTip::None,
                 MenuTip::Text(LONG.into()),
-                MenuTip::Folder(vec![Some(LETTER.into()), None]),
+                MenuTip::Folder(vec![MenuTip::Text(LETTER.into()), MenuTip::None]),
             ],
         );
 

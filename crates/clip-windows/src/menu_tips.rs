@@ -1,5 +1,6 @@
 //! Tooltips for Clipdeck's native menus: resting on an item whose label was
-//! shortened shows the whole Clip next to the menu.
+//! shortened shows the whole Clip next to the menu, and resting on an image
+//! shows a larger picture of it there (see `menu_preview`).
 //!
 //! Win32 menus have no tooltips of their own, and their owner window (which
 //! gets `WM_MENUSELECT`) belongs to Tauri, not to us. So while one of our menus
@@ -53,14 +54,22 @@ struct Registered {
     tips: Vec<MenuTip>,
 }
 
-/// A highlighted item that has a tooltip.
+/// What resting on an item shows beside the menu.
+#[derive(Clone, PartialEq)]
+enum Shown {
+    Text(String),
+    /// An image, by what `menu_preview`'s loader knows it as.
+    Image(String),
+}
+
+/// A highlighted item that has something to show.
 #[derive(Clone, PartialEq)]
 struct Hover {
     /// The menu window showing the item, and the item's place in it.
     window: isize,
     hmenu: isize,
     position: u32,
-    text: String,
+    shown: Shown,
 }
 
 #[derive(Default)]
@@ -145,6 +154,20 @@ impl State {
         if hover != self.hover {
             self.hide();
             self.hover_since = hover.is_some().then(Instant::now);
+            // A picture takes a moment to get ready; start during the delay.
+            if let Some(Hover {
+                window,
+                shown: Shown::Image(key),
+                ..
+            }) = &hover
+            {
+                let dpi = GetDpiForWindow(HWND(*window as _)).max(96);
+                crate::menu_preview::request(
+                    key,
+                    crate::menu_preview::MAX_WIDTH * dpi / 96,
+                    crate::menu_preview::MAX_HEIGHT * dpi / 96,
+                );
+            }
             self.hover = hover;
         } else if !self.showing && self.hover_since.is_some_and(|t| t.elapsed() >= HOVER_DELAY) {
             if let Some(hover) = self.hover.clone() {
@@ -154,9 +177,6 @@ impl State {
     }
 
     unsafe fn show(&mut self, hover: &Hover) {
-        let Some(tooltip) = self.tooltip() else {
-            return;
-        };
         let (mut item, mut menu) = (RECT::default(), RECT::default());
         if GetMenuItemRect(None, HMENU(hover.hmenu as _), hover.position, &mut item).is_err()
             || GetWindowRect(HWND(hover.window as _), &mut menu).is_err()
@@ -164,10 +184,20 @@ impl State {
             return;
         }
         let scale = |px: i32| px * GetDpiForWindow(HWND(hover.window as _)).max(96) as i32 / 96;
+        let text = match &hover.shown {
+            Shown::Text(text) => text,
+            // Not ready yet: the next poll tries again.
+            Shown::Image(key) => {
+                self.showing = crate::menu_preview::show(key, menu, item.top, scale(GAP));
+                return;
+            }
+        };
+        let Some(tooltip) = self.tooltip() else {
+            return;
+        };
 
         // Tooltips draw a tab as a box.
-        self.text = hover
-            .text
+        self.text = text
             .replace('\t', "    ")
             .encode_utf16()
             .chain(Some(0))
@@ -216,30 +246,13 @@ impl State {
         self.showing = true;
 
         let mut shown = RECT::default();
-        let mut monitor = MONITORINFO {
-            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
-            ..Default::default()
-        };
-        let corner = POINT { x, y: item.top };
-        if GetWindowRect(tooltip, &mut shown).is_err()
-            || !GetMonitorInfoW(
-                MonitorFromPoint(corner, MONITOR_DEFAULTTONEAREST),
-                &mut monitor,
-            )
-            .as_bool()
-        {
+        if GetWindowRect(tooltip, &mut shown).is_err() {
             return;
         }
-        let work = monitor.rcWork;
-        let (width, height) = (shown.right - shown.left, shown.bottom - shown.top);
-        let fitted_x = if x + width > work.right {
-            menu.left - scale(GAP) - width
-        } else {
-            x
-        };
-        let fitted_y = item.top.min(work.bottom - height).max(work.top);
-        if (fitted_x, fitted_y) != (x, item.top) {
-            place(fitted_x, fitted_y);
+        let size = (shown.right - shown.left, shown.bottom - shown.top);
+        let fitted = place_beside(menu, item.top, size, scale(GAP));
+        if fitted != (x, item.top) {
+            place(fitted.0, fitted.1);
         }
     }
 
@@ -248,6 +261,9 @@ impl State {
             let tool = tool_info();
             let tool = LPARAM(&tool as *const _ as isize);
             SendMessageW(tooltip, TTM_TRACKACTIVATE, WPARAM(0), tool);
+        }
+        if self.showing {
+            crate::menu_preview::hide();
         }
         self.showing = false;
     }
@@ -288,6 +304,38 @@ impl State {
     }
 }
 
+/// Where something of `size` goes beside `menu`: `gap` to its right and level
+/// with `item_top`, or to its left if the right is off-screen, and nudged up
+/// if it would run off the bottom.
+pub(crate) unsafe fn place_beside(
+    menu: RECT,
+    item_top: i32,
+    size: (i32, i32),
+    gap: i32,
+) -> (i32, i32) {
+    let x = menu.right + gap;
+    let mut monitor = MONITORINFO {
+        cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+        ..Default::default()
+    };
+    let corner = POINT { x, y: item_top };
+    if !GetMonitorInfoW(
+        MonitorFromPoint(corner, MONITOR_DEFAULTTONEAREST),
+        &mut monitor,
+    )
+    .as_bool()
+    {
+        return (x, item_top);
+    }
+    let work = monitor.rcWork;
+    let fitted_x = if x + size.0 > work.right {
+        menu.left - gap - size.0
+    } else {
+        x
+    };
+    (fitted_x, item_top.min(work.bottom - size.1).max(work.top))
+}
+
 /// The one "tool" our tooltip has: not tied to a window, placed by hand.
 fn tool_info() -> TTTOOLINFOW {
     TTTOOLINFOW {
@@ -318,7 +366,8 @@ pub(crate) unsafe fn open_menu_windows() -> Vec<(isize, isize)> {
     open
 }
 
-/// The highlighted item of `menu` (or of its open folder), if it has a tooltip.
+/// The highlighted item of `menu` (or of its open folder), if resting on it
+/// shows something.
 unsafe fn highlighted(menu: &Registered, open: &[(isize, isize)]) -> Option<Hover> {
     let window_of = |hmenu: isize| {
         open.iter()
@@ -329,24 +378,29 @@ unsafe fn highlighted(menu: &Registered, open: &[(isize, isize)]) -> Option<Hove
         let state = GetMenuState(HMENU(hmenu as _), position as u32, MF_BYPOSITION);
         state != u32::MAX && state & MF_HILITE.0 != 0
     };
-    let hover = |window, hmenu, position: usize, text: &str| Hover {
-        window,
-        hmenu,
-        position: position as u32,
-        text: text.to_string(),
+    let hover = |window, hmenu, position: usize, tip: &MenuTip| {
+        let shown = match tip {
+            MenuTip::Text(text) => Shown::Text(text.clone()),
+            MenuTip::Image(key) => Shown::Image(key.clone()),
+            MenuTip::None | MenuTip::Folder(_) => return None,
+        };
+        Some(Hover {
+            window,
+            hmenu,
+            position: position as u32,
+            shown,
+        })
     };
 
     let window = window_of(menu.hmenu)?;
     let position = (0..menu.tips.len()).find(|&position| is_highlighted(menu.hmenu, position))?;
     match &menu.tips[position] {
-        MenuTip::None => None,
-        MenuTip::Text(text) => Some(hover(window, menu.hmenu, position, text)),
         MenuTip::Folder(tips) => {
             let folder = GetSubMenu(HMENU(menu.hmenu as _), position as i32).0 as isize;
             let window = window_of(folder)?;
             let position = (0..tips.len()).find(|&position| is_highlighted(folder, position))?;
-            let text = tips[position].as_deref()?;
-            Some(hover(window, folder, position, text))
+            hover(window, folder, position, &tips[position])
         }
+        tip => hover(window, menu.hmenu, position, tip),
     }
 }
