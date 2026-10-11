@@ -526,8 +526,8 @@ fn activation_modifiers() -> HeldModifiers {
     return clip_windows::take_activation_modifiers();
     #[cfg(target_os = "macos")]
     return clip_macos::held_modifiers();
-    #[cfg(not(any(windows, target_os = "macos")))]
-    HeldModifiers::default()
+    #[cfg(target_os = "linux")]
+    return clip_linux::held_modifiers();
 }
 
 /// A plain click pastes; with the delete or pin modifier held (Clipy's beta
@@ -574,7 +574,7 @@ fn with_target_index(
 /// pastes it (ADR-0005). Windows pastes into the app that was focused before
 /// the popup; from the tray there's no such app (the taskbar has focus), so it
 /// only copies. On macOS a menu never takes focus, so either menu pastes into
-/// the frontmost app.
+/// the frontmost app; on Linux focus goes back to the app when the menu closes.
 fn paste(app: &AppHandle, target: &Target, paste_into_previous: bool) {
     if let Err(err) = copy(app, &target.content) {
         eprintln!("couldn't write the clipboard: {err}");
@@ -596,6 +596,15 @@ fn paste(app: &AppHandle, target: &Target, paste_into_previous: bool) {
     if !clip_macos::paste_into_frontmost_app() {
         eprintln!("copied only: Clipdeck needs the Accessibility permission to paste");
     }
+    // A menu holds the keyboard while it's open, and its item is chosen just
+    // before it lets go, so the keys wait a moment for the app underneath.
+    #[cfg(target_os = "linux")]
+    std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        if !clip_linux::paste_into_focused_app() {
+            eprintln!("copied only: couldn't send the paste keys");
+        }
+    });
 }
 
 fn copy(app: &AppHandle, content: &ClipContent) -> Result<(), String> {

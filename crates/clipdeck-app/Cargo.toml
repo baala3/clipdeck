@@ -25,3 +25,6 @@ clip-windows = { path = "../clip-windows" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 clip-macos = { path = "../clip-macos" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+clip-linux = { path = "../clip-linux" }

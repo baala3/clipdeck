@@ -563,6 +563,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "clip-linux"
+version = "0.1.0"
+dependencies = [
+ "clip-engine",
+ "x11rb",
+]
+
+[[package]]
 name = "clip-macos"
 version = "0.1.0"
 dependencies = [
@@ -598,6 +606,7 @@ dependencies = [
  "auto-launch",
  "base64 0.22.1",
  "clip-engine",
+ "clip-linux",
  "clip-macos",
  "clip-windows",
  "serde",
