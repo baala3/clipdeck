@@ -43,14 +43,15 @@ pub struct Settings {
 impl Default for Settings {
     /// Mirrors Clipy's defaults, with Clipy's Command key mapped to Ctrl on
     /// Windows, except that the first ten items sit directly in the menu
-    /// (Clipy puts every item in a folder) so the newest Clips are one click away.
+    /// (Clipy puts every item in a folder) so the newest Clips are one click
+    /// away, and that the hotkeys are named after their menus (ADR-0010).
     fn default() -> Self {
         Self {
             launch_at_login: true,
             appearance: Appearance::System,
-            main_hotkey: "CommandOrControl+Shift+V".into(),
-            history_hotkey: "CommandOrControl+Alt+V".into(),
-            pinned_hotkey: "CommandOrControl+Shift+B".into(),
+            main_hotkey: "CommandOrControl+Shift+D".into(),
+            history_hotkey: "CommandOrControl+Shift+H".into(),
+            pinned_hotkey: "CommandOrControl+Shift+P".into(),
             clear_history_hotkey: String::new(),
             history_capacity: crate::DEFAULT_HISTORY_CAPACITY,
             excluded_apps: Vec::new(),

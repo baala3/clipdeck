@@ -149,6 +149,10 @@ fn main() {
             });
 
             settings::apply_appearance(app.handle(), current_appearance);
+            #[cfg(windows)]
+            clip_menu::watch_menu_actions(app.handle());
+            #[cfg(windows)]
+            clip_menu::provide_image_previews(app.handle());
 
             #[cfg(windows)]
             spawn_capture_thread(

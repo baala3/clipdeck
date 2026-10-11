@@ -21,8 +21,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 /// The size of every thumbnail's bitmap, at 96 DPI. A menu lines its items'
 /// text up after the widest bitmap, so they're all made the same size, with
 /// the thumbnail centered: a column of pictures instead of a ragged edge.
-const WIDTH: u32 = 64;
-const HEIGHT: u32 = 32;
+const WIDTH: u32 = 48;
+const HEIGHT: u32 = 24;
 
 /// The thumbnail for one row of a menu.
 pub struct MenuImage {
