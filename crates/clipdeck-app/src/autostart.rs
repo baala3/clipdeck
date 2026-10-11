@@ -7,7 +7,8 @@
 
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
 
-/// The `Run` value on Windows and the LaunchAgent name on macOS. The NSIS
+/// The `Run` value on Windows, the LaunchAgent name on macOS, and the
+/// autostart entry's name on Linux. The NSIS
 /// uninstaller deletes the `Run` value by this name.
 const LOGIN_ITEM_NAME: &str = "Clipdeck";
 
@@ -33,6 +34,10 @@ pub fn sync(enabled: bool) -> Result<(), String> {
 
 fn login_item() -> Result<AutoLaunch, String> {
     let exe = std::env::current_exe().map_err(|err| err.to_string())?;
+    // An AppImage runs from a mount that's gone after it exits; the file to
+    // start at login is the AppImage itself.
+    #[cfg(target_os = "linux")]
+    let exe = std::env::var_os("APPIMAGE").map_or(exe, std::path::PathBuf::from);
     let mut builder = AutoLaunchBuilder::new();
     builder.set_app_name(LOGIN_ITEM_NAME);
     #[cfg(windows)]

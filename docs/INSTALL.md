@@ -1,6 +1,6 @@
 # Installing Clipdeck
 
-Clipdeck is installed with one command, on both Windows and macOS.
+Clipdeck is installed with one command, on Windows, macOS, and Linux.
 There is no installer to download and no app store.
 
 Once installed, Clipdeck keeps itself up to date: it checks for a new version shortly after it starts and once a day, and asks before installing one.
@@ -62,11 +62,39 @@ Settings, History, and Pinned items are kept in `~/Library/Application Support/d
 
 To uninstall, quit Clipdeck from its menu bar icon, drag it from Applications to the Trash, and delete `~/Library/Application Support/dev.clipdeck.app` and `~/Library/LaunchAgents/Clipdeck.plist`.
 
+## Linux
+
+Clipdeck runs on 64-bit Intel and AMD computers, in an X11 session.
+It does not work on Wayland yet: there Clipdeck says so and quits, and the install command refuses to run.
+On a distribution that starts Wayland by default (Ubuntu and Fedora do), log out and pick the X11 session, often called "Xorg", on the login screen first.
+Open a terminal and run:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/baala3/clipdeck/main/install.sh | sh
+```
+
+This downloads the latest version as an AppImage to `~/.local/bin/Clipdeck.AppImage`, adds Clipdeck to the applications menu, and starts it.
+It needs no administrator rights.
+
+Clipdeck lives in the system tray.
+GNOME shows no tray icons unless the "AppIndicator and KStatusNotifierItem Support" extension is on (Ubuntu ships with it on); without a tray, the hotkeys still open every menu.
+
+A hotkey opens its menu when you let the keys go, not when you press them.
+Choosing a Clip pastes it with Ctrl+V into the window you were in.
+A terminal pastes with Ctrl+Shift+V instead, so there the Clip is copied and you paste it yourself.
+
+Settings are kept in `~/.config/dev.clipdeck.app/settings.toml`, which you can also edit by hand.
+History and Pinned items are kept in `~/.local/share/dev.clipdeck.app`.
+
+To uninstall, quit Clipdeck from its menu ("More", then "Quit Clipdeck"), and delete `~/.local/bin/Clipdeck.AppImage`, `~/.local/share/applications/clipdeck.desktop`, `~/.config/autostart/Clipdeck.desktop`, `~/.config/dev.clipdeck.app`, and `~/.local/share/dev.clipdeck.app`.
+
 ## Why a command
 
 Clipdeck is unsigned ([ADR-0002](adr/0002-ship-unsigned.md)).
 Windows and macOS only distrust an unsigned app when a browser downloaded it: Windows shows a SmartScreen warning, and macOS refuses to open it.
 A download made by PowerShell or `curl` isn't marked that way, so the same app installs and opens normally.
 That makes the commands the one route that works for everyone, and the only one we offer ([ADR-0009](adr/0009-install-by-command-only.md)).
+
+Linux has no such warning, and uses the same command so that there is one way to install Clipdeck everywhere.
 
 The scripts are short: read [install.ps1](../install.ps1) and [install.sh](../install.sh) before running them if you like.

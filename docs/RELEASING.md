@@ -40,8 +40,8 @@ The workflow then:
 
 1. checks the version is newer than the current one, and bumps it in `crates/clipdeck-app/Cargo.toml` and `Cargo.lock`;
 2. commits that to `main` as "Release 0.4.0" and tags it `v0.4.0`, pushing with the [release deploy key](#the-release-deploy-key);
-3. builds the Windows installer and the universal macOS app on GitHub's own runners, never on a dev machine (see [ADR-0007](adr/0007-ci-built-installers-with-auto-update.md));
-4. publishes them as the latest release, once both builds have succeeded;
+3. builds the Windows installer, the universal macOS app, and the Linux AppImage on GitHub's own runners, never on a dev machine (see [ADR-0007](adr/0007-ci-built-installers-with-auto-update.md));
+4. publishes them as the latest release, once all three builds have succeeded;
 5. checks that the install commands now serve the new version.
 
 It takes roughly ten minutes.

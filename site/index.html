@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Clipdeck - a clipboard manager for Windows and macOS</title>
-<meta name="description" content="Clipdeck remembers what you copy and pastes it back from a menu at your cursor. Free, open source, for Windows and macOS." />
+<title>Clipdeck - a clipboard manager for Windows, macOS and Linux</title>
+<meta name="description" content="Clipdeck remembers what you copy and pastes it back from a menu at your cursor. Free, open source, for Windows, macOS and Linux." />
 <meta property="og:title" content="Clipdeck" />
-<meta property="og:description" content="Everything you copied, one hotkey away. A free, open source clipboard manager for Windows and macOS." />
+<meta property="og:description" content="Everything you copied, one hotkey away. A free, open source clipboard manager for Windows, macOS and Linux." />
 <meta property="og:type" content="website" />
 <meta property="og:image" content="https://baala3.github.io/clipdeck/icon.png" />
 <link rel="icon" type="image/svg+xml" href="icon.svg" />
@@ -183,6 +183,8 @@ try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dat
 
   /* Install */
   .install { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 40px; }
+  /* A third card would sit alone on its row, so it takes the whole row. */
+  .install .card:nth-child(odd):last-child { grid-column: 1 / -1; }
   @media (max-width: 800px) { .install { grid-template-columns: minmax(0, 1fr); } }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 26px; display: flex; flex-direction: column; }
   .card.suggested { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
@@ -235,7 +237,7 @@ try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dat
   <div class="wrap hero">
     <div>
       <h1>Everything you copied, <em>one hotkey away.</em></h1>
-      <p class="lede">Clipdeck is a small clipboard manager for Windows and macOS. It remembers what you copy and pastes it back from a menu right at your cursor.</p>
+      <p class="lede">Clipdeck is a small clipboard manager for Windows, macOS and Linux. It remembers what you copy and pastes it back from a menu right at your cursor.</p>
       <div class="cta">
         <a class="btn primary" href="#install">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
@@ -405,6 +407,22 @@ try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dat
           </div>
           <p class="after">Clipdeck then lives in the menu bar. The first time you choose a Clip, macOS asks you to allow Accessibility so it can paste for you.</p>
         </div>
+
+        <div class="card" data-os="linux">
+          <div class="card-head">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.500"/><path d="M7 9.500l3 2.500-3 2.500M12.500 15H17"/></svg>
+            <div>
+              <h3>Linux</h3>
+              <p class="req">64-bit Intel or AMD, in an X11 session (not Wayland yet)</p>
+            </div>
+          </div>
+          <p class="how">Open a terminal and run:</p>
+          <div class="command">
+            <pre><code>curl -fsSL https://raw.githubusercontent.com/baala3/clipdeck/main/install.sh | sh</code></pre>
+            <button type="button">Copy</button>
+          </div>
+          <p class="after">No administrator rights needed. Clipdeck installs as a single AppImage and then lives in the system tray.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -422,11 +440,11 @@ try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dat
         <details>
           <summary>Why a command and not a download button?</summary>
           <p>Clipdeck is not signed with a paid developer certificate. Windows warns about an unsigned app downloaded with a browser, and macOS refuses to open one. The one-line command installs the same app without either problem.</p>
-          <p>The scripts are short and you can read them first: <a href="https://github.com/baala3/clipdeck/blob/main/install.ps1">install.ps1</a> for Windows and <a href="https://github.com/baala3/clipdeck/blob/main/install.sh">install.sh</a> for macOS. Some Windows 11 PCs have Smart App Control switched on, which blocks unsigned apps either way; the <a href="https://github.com/baala3/clipdeck/blob/main/docs/INSTALL.md">install guide</a> explains.</p>
+          <p>The scripts are short and you can read them first: <a href="https://github.com/baala3/clipdeck/blob/main/install.ps1">install.ps1</a> for Windows and <a href="https://github.com/baala3/clipdeck/blob/main/install.sh">install.sh</a> for macOS and Linux. Some Windows 11 PCs have Smart App Control switched on, which blocks unsigned apps either way; the <a href="https://github.com/baala3/clipdeck/blob/main/docs/INSTALL.md">install guide</a> explains.</p>
         </details>
         <details>
           <summary>Where are my Clips stored?</summary>
-          <p>On your own computer, in your user folder: <code>%LOCALAPPDATA%\dev.clipdeck.app</code> on Windows and <code>~/Library/Application Support/dev.clipdeck.app</code> on macOS. There is no account and no cloud sync.</p>
+          <p>On your own computer, in your user folder: <code>%LOCALAPPDATA%\dev.clipdeck.app</code> on Windows, <code>~/Library/Application Support/dev.clipdeck.app</code> on macOS and <code>~/.local/share/dev.clipdeck.app</code> on Linux. There is no account and no cloud sync.</p>
         </details>
         <details>
           <summary>Does it save my passwords?</summary>
@@ -438,11 +456,11 @@ try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dat
         </details>
         <details>
           <summary>How do I uninstall it?</summary>
-          <p>On Windows, use "Add or remove programs". On macOS, quit Clipdeck from its menu bar icon and drag it from Applications to the Trash. The <a href="https://github.com/baala3/clipdeck/blob/main/docs/INSTALL.md">install guide</a> lists the leftover files you can delete.</p>
+          <p>On Windows, use "Add or remove programs". On macOS, quit Clipdeck from its menu bar icon and drag it from Applications to the Trash. On Linux, quit it from its menu and delete <code>~/.local/bin/Clipdeck.AppImage</code>. The <a href="https://github.com/baala3/clipdeck/blob/main/docs/INSTALL.md">install guide</a> lists the leftover files you can delete.</p>
         </details>
         <details>
-          <summary>Is there a Linux version?</summary>
-          <p>Not yet. Clipdeck runs on Windows and macOS today.</p>
+          <summary>Does it work on Wayland?</summary>
+          <p>Not yet. On Linux, Clipdeck needs an X11 session, which most distributions still offer on the login screen, often as "Xorg". Wayland keeps apps from watching the clipboard, setting hotkeys and pasting for you in the ways Clipdeck does all three.</p>
         </details>
       </div>
     </div>
@@ -470,7 +488,8 @@ if (isMac) {
   });
   document.querySelectorAll('[data-alt]').forEach((el) => { el.textContent = '⌥'; });
 }
-const os = isMac ? 'mac' : isWindows ? 'windows' : null;
+const isLinux = /Linux|X11/.test(navigator.platform || navigator.userAgent) && !/Android/.test(navigator.userAgent);
+const os = isMac ? 'mac' : isWindows ? 'windows' : isLinux ? 'linux' : null;
 document.querySelector(`.card[data-os="${os}"]`)?.classList.add('suggested');
 
 // The site is light by default; the header button switches to dark and remembers it.

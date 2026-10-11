@@ -1,7 +1,7 @@
 //! Image Clips. A copied image is kept as a PNG that Clipdeck encodes itself,
 //! with a small thumbnail for the menus. Two copies are the same Clip when
 //! their pixels match, whatever format the clipboard handed them over in, so
-//! an image is identified by a digest of its pixels (see ADR-0009).
+//! an image is identified by a digest of its pixels (see ADR-0010).
 
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
