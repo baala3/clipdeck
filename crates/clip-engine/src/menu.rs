@@ -148,8 +148,7 @@ pub fn layout(clips: &[ClipContent], options: &MenuLayout) -> Vec<MenuEntry> {
 /// that's what choosing the Clip itself does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClipAction {
-    /// Opens the editor of the Clip's pinned item, or for a History Clip that
-    /// isn't pinned, a new pinned item that starts with its text.
+    /// Opens the editor of the pinned item, or of the History Clip itself.
     Edit,
     Pin,
     /// Takes the Clip out of Pinned and leaves History as it is.

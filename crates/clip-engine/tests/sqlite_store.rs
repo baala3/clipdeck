@@ -153,6 +153,37 @@ fn sqlite_pinned_store_replaces_a_clip_in_place() {
 }
 
 #[test]
+fn sqlite_store_replaces_a_clip_in_place() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("clips.sqlite3");
+    let mut store = SqliteClipStore::open(path.to_str().unwrap());
+    for text in ["one", "two", "three"] {
+        store.push(Clip {
+            content: ClipContent::Text(text.into()),
+            source_app: Some("Notes".into()),
+        });
+    }
+
+    store.replace(
+        1,
+        Clip {
+            content: ClipContent::Text("TWO".into()),
+            source_app: Some("Notes".into()),
+        },
+    );
+
+    let texts: Vec<ClipContent> = store.all().into_iter().map(|c| c.content).collect();
+    assert_eq!(
+        texts,
+        vec![
+            ClipContent::Text("one".into()),
+            ClipContent::Text("TWO".into()),
+            ClipContent::Text("three".into())
+        ]
+    );
+}
+
+#[test]
 fn sqlite_stores_persist_image_clips_with_their_size() {
     let dir = tempfile::tempdir().unwrap();
     let history_path = dir.path().join("clips.sqlite3");

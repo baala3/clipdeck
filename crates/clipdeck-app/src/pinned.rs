@@ -1,5 +1,6 @@
 //! Commands behind the Settings Window's Pinned section, where pinned items
-//! are written, edited, and removed (Clipy's "Edit Snippets" equivalent).
+//! are written, edited, and removed (Clipy's "Edit Snippets" equivalent), and
+//! behind its editor for a History Clip.
 
 use crate::{clip_menu, AppState};
 use base64::prelude::{Engine as _, BASE64_STANDARD};
@@ -90,4 +91,29 @@ pub async fn remove_pinned(
     state.engine.lock().unwrap().unpin(index);
     clip_menu::refresh_tray_menu(&app);
     Ok(())
+}
+
+/// Rewrites the History Clip that holds `original`. It's found by its text,
+/// not by an index, because History moves on while the editor is open.
+#[tauri::command]
+pub async fn edit_history_clip(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    original: String,
+    text: String,
+) -> Result<(), String> {
+    let edited = {
+        let mut engine = state.engine.lock().unwrap();
+        let original = ClipContent::Text(original);
+        let index = engine
+            .history()
+            .iter()
+            .position(|clip| clip.content == original)
+            .ok_or("That Clip is no longer in History.")?;
+        engine.update_history(index, text)
+    };
+    clip_menu::refresh_tray_menu(&app);
+    edited
+        .then_some(())
+        .ok_or_else(|| "A Clip can't be blank.".into())
 }
