@@ -3,21 +3,15 @@ name: CI
 # Lints and tests every PR and every push to main, on real Windows and macOS
 # runners. It does not build installers and never ships anything: that is the
 # Release workflow's job. See docs/RELEASING.md.
+#
+# It runs on every PR, because the "CI gate" job at the bottom is the check
+# main requires before a merge. Changes that touch no code skip the lint and
+# test jobs, and the gate passes on its own.
 
 on:
   push:
     branches: [main]
-    paths-ignore: &not-code
-      - "site/**"
-      - "docs/**"
-      - "**.md"
-      - "LICENSE"
-      - "install.sh"
-      - "install.ps1"
-      - ".github/workflows/pages.yml"
-      - ".github/workflows/release.yml"
   pull_request:
-    paths-ignore: *not-code
   workflow_dispatch:
 
 concurrency:
@@ -31,8 +25,40 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  changes:
+    name: Detect code changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # If the list of files can't be fetched, assume code changed.
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename') || files=unknown ;;
+            push)
+              files=$(gh api "repos/$GITHUB_REPOSITORY/compare/$BEFORE...$GITHUB_SHA" --jq '.files[].filename') || files=unknown ;;
+            *)
+              files=unknown ;;
+          esac
+          # Not code: the website, the docs, the install scripts, and the workflows that don't test.
+          not_code='^(site/.*|docs/.*|.*\.md|LICENSE|install\.sh|install\.ps1|\.github/workflows/(pages|release)\.yml)$'
+          if grep -qvE "$not_code" <<< "$files"; then code=true; else code=false; fi
+          echo "$files"
+          echo "code=$code" | tee -a "$GITHUB_OUTPUT"
+
   engine:
     name: Engine (Linux)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,6 +75,8 @@ jobs:
 
   app:
     name: App (${{ matrix.name }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -70,3 +98,17 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy -p clipdeck-app -p ${{ matrix.platform_crate }} --all-targets -- -D warnings
       - run: cargo test -p ${{ matrix.platform_crate }}
+
+  gate:
+    # The one check main requires. Skipped jobs count as passing, so a PR that
+    # touches no code can merge; a failed or cancelled job blocks it.
+    name: CI gate
+    if: always()
+    needs: [changes, engine, app]
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          ! grep -qE 'failure|cancelled' <<< "$RESULTS"
