@@ -34,10 +34,6 @@ What each action does:
 - **Delete** removes a History Clip from History, where a pinned copy of it stays, and removes a pinned item from both Pinned and History.
   The delete modifier+click does the same, so on a pinned item it now clears History's copy too, where it used to only unpin.
 
-After Pin, Unpin or Delete from a hotkey menu, the Clips' menu is there again with the change in it, so several Clips can be tidied in one go; it goes away when a Clip is pasted or the menu is dismissed.
-A native menu can't be changed while it's open, so choosing an action closes it and a fresh one opens in the same place.
-Edit doesn't bring it back, since the Settings Window takes over, and neither does the tray menu, which Clipdeck can't open itself.
-
 Which actions a Clip offers, and what they're called, is decided in `clip-engine` (`menu::history_clip_actions`, `menu::pinned_clip_actions`), so it is tested without a GUI.
 
 ## Windows only, for now
