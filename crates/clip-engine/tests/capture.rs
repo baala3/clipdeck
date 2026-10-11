@@ -1,8 +1,11 @@
 use clip_engine::{
     CaptureOutcome, Clip, ClipContent, ClipEngine, ClipStore, ClipboardSource, EngineConfig,
-    IncomingClip, PinnedStore, Settings,
+    IncomingClip, IncomingContent, PinnedStore, Settings,
 };
 use std::collections::VecDeque;
+
+mod common;
+use common::InMemoryImageStore;
 
 struct FakeSource {
     events: VecDeque<IncomingClip>,
@@ -78,7 +81,7 @@ impl PinnedStore for InMemoryPinnedStore {
 
 fn text_clip(text: &str) -> IncomingClip {
     IncomingClip {
-        content: ClipContent::Text(text.into()),
+        content: IncomingContent::Text(text.into()),
         source_app: Some("TextEdit".into()),
         concealed: false,
     }
@@ -95,9 +98,14 @@ fn history_capacity_is_clamped_to_the_hard_ceiling_of_2000() {
     let store = InMemoryStore::default();
     let config = EngineConfig {
         history_capacity: 5000,
-        excluded_apps: Default::default(),
+        ..Default::default()
     };
-    let engine = ClipEngine::new(store, InMemoryPinnedStore::default(), config);
+    let engine = ClipEngine::new(
+        store,
+        InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
+        config,
+    );
 
     assert_eq!(engine.history_capacity(), 2000);
 }
@@ -107,9 +115,14 @@ fn history_evicts_the_oldest_clip_once_capacity_is_exceeded() {
     let store = InMemoryStore::default();
     let config = EngineConfig {
         history_capacity: 2,
-        excluded_apps: Default::default(),
+        ..Default::default()
     };
-    let mut engine = ClipEngine::new(store, InMemoryPinnedStore::default(), config);
+    let mut engine = ClipEngine::new(
+        store,
+        InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
+        config,
+    );
 
     engine.capture(text_clip("first"));
     engine.capture(text_clip("second"));
@@ -136,11 +149,17 @@ fn clips_from_an_excluded_app_are_dropped() {
     let config = EngineConfig {
         history_capacity: 200,
         excluded_apps,
+        ..Default::default()
     };
-    let mut engine = ClipEngine::new(store, InMemoryPinnedStore::default(), config);
+    let mut engine = ClipEngine::new(
+        store,
+        InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
+        config,
+    );
 
     let outcome = engine.capture(IncomingClip {
-        content: ClipContent::Text("secret".into()),
+        content: IncomingContent::Text("secret".into()),
         source_app: Some("1Password".into()),
         concealed: false,
     });
@@ -154,9 +173,14 @@ fn draining_a_clipboard_source_captures_each_event_in_order() {
     let store = InMemoryStore::default();
     let config = EngineConfig {
         history_capacity: 200,
-        excluded_apps: Default::default(),
+        ..Default::default()
     };
-    let mut engine = ClipEngine::new(store, InMemoryPinnedStore::default(), config);
+    let mut engine = ClipEngine::new(
+        store,
+        InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
+        config,
+    );
 
     let mut source = FakeSource {
         events: VecDeque::from([text_clip("first"), text_clip("second")]),
@@ -175,6 +199,7 @@ fn clips_copied_while_capture_is_paused_never_reach_history_after_resuming() {
     let mut engine = ClipEngine::new(
         InMemoryStore::default(),
         InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
         EngineConfig::default(),
     );
     let mut source = FakeSource {
@@ -194,6 +219,7 @@ fn text_that_is_only_whitespace_is_dropped() {
     let mut engine = ClipEngine::new(
         InMemoryStore::default(),
         InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
         EngineConfig::default(),
     );
 
@@ -210,12 +236,17 @@ fn clips_marked_concealed_are_dropped() {
     let store = InMemoryStore::default();
     let config = EngineConfig {
         history_capacity: 200,
-        excluded_apps: Default::default(),
+        ..Default::default()
     };
-    let mut engine = ClipEngine::new(store, InMemoryPinnedStore::default(), config);
+    let mut engine = ClipEngine::new(
+        store,
+        InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
+        config,
+    );
 
     let outcome = engine.capture(IncomingClip {
-        content: ClipContent::Text("one-time password".into()),
+        content: IncomingContent::Text("one-time password".into()),
         source_app: Some("SomeApp".into()),
         concealed: true,
     });
@@ -229,12 +260,17 @@ fn capturing_a_text_clip_makes_it_appear_in_history() {
     let store = InMemoryStore::default();
     let config = EngineConfig {
         history_capacity: 200,
-        excluded_apps: Default::default(),
+        ..Default::default()
     };
-    let mut engine = ClipEngine::new(store, InMemoryPinnedStore::default(), config);
+    let mut engine = ClipEngine::new(
+        store,
+        InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
+        config,
+    );
 
     let outcome = engine.capture(IncomingClip {
-        content: ClipContent::Text("hello world".into()),
+        content: IncomingContent::Text("hello world".into()),
         source_app: Some("TextEdit".into()),
         concealed: false,
     });
@@ -250,11 +286,12 @@ fn capturing_a_text_clip_makes_it_appear_in_history() {
 fn lowering_history_capacity_at_runtime_evicts_the_oldest_clips_immediately() {
     let config = EngineConfig {
         history_capacity: 5,
-        excluded_apps: Default::default(),
+        ..Default::default()
     };
     let mut engine = ClipEngine::new(
         InMemoryStore::default(),
         InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
         config,
     );
     for text in ["one", "two", "three", "four"] {
@@ -263,7 +300,7 @@ fn lowering_history_capacity_at_runtime_evicts_the_oldest_clips_immediately() {
 
     engine.reconfigure(EngineConfig {
         history_capacity: 2,
-        excluded_apps: Default::default(),
+        ..Default::default()
     });
 
     let history = engine.history();
@@ -285,15 +322,17 @@ fn exclusion_entries_match_source_apps_ignoring_case_and_a_windows_exe_suffix() 
     let config = EngineConfig {
         history_capacity: 200,
         excluded_apps: ["keepass".to_string(), "Bitwarden.exe".to_string()].into(),
+        ..Default::default()
     };
     let mut engine = ClipEngine::new(
         InMemoryStore::default(),
         InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
         config,
     );
 
     let from = |app: &str| IncomingClip {
-        content: ClipContent::Text("secret".into()),
+        content: IncomingContent::Text("secret".into()),
         source_app: Some(app.into()),
         concealed: false,
     };
@@ -313,6 +352,7 @@ fn an_engine_reconfigured_from_settings_applies_their_capacity_and_exclusions() 
     let mut engine = ClipEngine::new(
         InMemoryStore::default(),
         InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
         EngineConfig::default(),
     );
     let settings = Settings {
@@ -330,7 +370,9 @@ fn an_engine_reconfigured_from_settings_applies_their_capacity_and_exclusions() 
     );
 }
 
-fn history_texts(engine: &ClipEngine<InMemoryStore, InMemoryPinnedStore>) -> Vec<String> {
+fn history_texts(
+    engine: &ClipEngine<InMemoryStore, InMemoryPinnedStore, InMemoryImageStore>,
+) -> Vec<String> {
     engine
         .history()
         .into_iter()
@@ -346,6 +388,7 @@ fn promoting_a_clip_moves_it_to_the_newest_position_without_duplicating_it() {
     let mut engine = ClipEngine::new(
         InMemoryStore::default(),
         InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
         EngineConfig::default(),
     );
     for text in ["one", "two", "three"] {
@@ -364,6 +407,7 @@ fn capturing_content_already_in_history_moves_it_to_the_top_instead_of_duplicati
     let mut engine = ClipEngine::new(
         InMemoryStore::default(),
         InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
         EngineConfig::default(),
     );
     for text in ["one", "two", "three"] {
@@ -380,6 +424,7 @@ fn deleting_a_clip_removes_only_that_clip_from_history() {
     let mut engine = ClipEngine::new(
         InMemoryStore::default(),
         InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
         EngineConfig::default(),
     );
     for text in ["one", "two", "three"] {
@@ -397,6 +442,7 @@ fn clearing_history_removes_every_clip_but_leaves_pinned_ones() {
     let mut engine = ClipEngine::new(
         InMemoryStore::default(),
         InMemoryPinnedStore::default(),
+        InMemoryImageStore::default(),
         EngineConfig::default(),
     );
     for text in ["one", "two"] {

@@ -122,6 +122,7 @@ impl Settings {
         crate::EngineConfig {
             history_capacity: self.history_capacity,
             excluded_apps: self.excluded_apps.iter().cloned().collect(),
+            ..Default::default()
         }
     }
 

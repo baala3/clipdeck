@@ -9,7 +9,7 @@ clip-engine = { path = "../clip-engine" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.5"
-objc2-foundation = { version = "0.2", features = ["NSArray", "NSEnumerator", "NSString"] }
-objc2-app-kit = { version = "0.2", features = ["NSEvent", "NSPasteboard", "NSRunningApplication", "NSWorkspace"] }
+objc2-foundation = { version = "0.2", features = ["NSArray", "NSData", "NSDictionary", "NSEnumerator", "NSString"] }
+objc2-app-kit = { version = "0.2", features = ["NSBitmapImageRep", "NSEvent", "NSImageRep", "NSPasteboard", "NSRunningApplication", "NSWorkspace"] }
 core-foundation = "0.10"
 core-graphics = "0.25"

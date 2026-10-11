@@ -7,7 +7,8 @@ mod settings;
 mod updates;
 
 use clip_engine::{
-    adopt_legacy_store, ClipEngine, ClipboardSource, Settings, SqliteClipStore, SqlitePinnedStore,
+    adopt_legacy_store, ClipEngine, ClipboardSource, DirImageStore, Settings, SqliteClipStore,
+    SqlitePinnedStore,
 };
 use clip_menu::{MenuKind, MenuTargets};
 use settings::{HotkeyAction, Hotkeys, SettingsState, SETTINGS_WINDOW};
@@ -18,7 +19,7 @@ use tauri::tray::TrayIconBuilder;
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_global_shortcut::ShortcutState;
 
-type Engine = ClipEngine<SqliteClipStore, SqlitePinnedStore>;
+type Engine = ClipEngine<SqliteClipStore, SqlitePinnedStore, DirImageStore>;
 
 struct AppState {
     engine: Mutex<Engine>,
@@ -125,7 +126,14 @@ fn main() {
             let current = settings_state.current().clone();
             let current_launch_at_login = current.launch_at_login;
             let current_appearance = current.appearance;
-            let engine = ClipEngine::new(store, pinned_store, current.engine_config());
+            // The PNGs behind image Clips, next to the stores that list them.
+            let image_store = DirImageStore::open(
+                app.path()
+                    .app_local_data_dir()
+                    .expect("no app data directory on this OS")
+                    .join("images"),
+            );
+            let engine = ClipEngine::new(store, pinned_store, image_store, current.engine_config());
             let hotkeys = Hotkeys::parse(&current)
                 .expect("SettingsState::load only keeps settings with valid hotkeys");
             app.manage(AppState {

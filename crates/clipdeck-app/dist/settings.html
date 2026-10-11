@@ -92,6 +92,9 @@
   #pinned-list > li + li { border-top: 1px solid var(--border); }
   #pinned-list .empty { color: var(--muted); padding: 10px 14px; }
   #pinned-list .text { flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-word; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-family: ui-monospace, "Cascadia Mono", Menlo, monospace; font-size: 12px; padding-top: 4px; }
+  #pinned-list > li.pinned-image { align-items: center; }
+  #pinned-list .image { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+  #pinned-list .image img { max-width: 120px; max-height: 40px; border: 1px solid var(--border); border-radius: 4px; }
   #pinned-list .actions { display: flex; gap: 4px; flex: none; }
   #pinned-list .actions button { padding: 3px 8px; font-size: 12px; }
   .editor { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; width: 100%; }
@@ -624,16 +627,32 @@ function renderPinned() {
       pinnedList.appendChild(li);
       continue;
     }
-    const text = document.createElement('span');
-    text.className = 'text';
-    text.textContent = item.text;
-    text.title = item.text;
     const actions = document.createElement('span');
     actions.className = 'actions';
-    const edit = document.createElement('button');
-    edit.type = 'button';
-    edit.textContent = 'Edit';
-    edit.onclick = () => { editing = item.index; renderPinned(); };
+    let content;
+    if (item.image) {
+      // A pinned image can be removed, but there's nothing to edit.
+      li.className = 'pinned-image';
+      content = document.createElement('span');
+      content.className = 'image';
+      if (item.image.thumbnail) {
+        const thumbnail = document.createElement('img');
+        thumbnail.src = item.image.thumbnail;
+        thumbnail.alt = '';
+        content.appendChild(thumbnail);
+      }
+      content.append(item.image.title);
+    } else {
+      content = document.createElement('span');
+      content.className = 'text';
+      content.textContent = item.text;
+      content.title = item.text;
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.textContent = 'Edit';
+      edit.onclick = () => { editing = item.index; renderPinned(); };
+      actions.appendChild(edit);
+    }
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.textContent = 'Remove';
@@ -645,8 +664,8 @@ function renderPinned() {
         showActionError(String(err));
       }
     };
-    actions.append(edit, remove);
-    li.append(text, actions);
+    actions.appendChild(remove);
+    li.append(content, actions);
     pinnedList.appendChild(li);
   }
 }

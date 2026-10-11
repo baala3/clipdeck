@@ -2,6 +2,8 @@
 //! titles, a few items inline, the rest grouped into "11 - 20" style folders.
 //! Pure presentation logic, kept here so it can be tested without a GUI.
 
+use crate::{ClipContent, ImageInfo};
+
 /// Only the first 10 items get a number shortcut: 1-9, then 0 for the tenth.
 const SHORTCUT_DIGITS: [char; 10] = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
 const ELLIPSIS: &str = "...";
@@ -27,6 +29,7 @@ pub struct MenuItemModel {
     pub label: String,
     pub shortcut_digit: Option<char>,
     /// The Clip's text, shown on hover when the label doesn't show all of it.
+    /// An image Clip has none; its thumbnail sits in the menu instead.
     pub tooltip: Option<String>,
 }
 
@@ -90,16 +93,28 @@ pub fn menu_tooltip(text: &str, title: &str) -> Option<String> {
     Some(tooltip)
 }
 
-/// Lays out `texts` (already in display order) the way Clipy does: numbering
+/// What an image Clip is called in a menu, where its thumbnail goes with it.
+pub fn image_title(image: &ImageInfo) -> String {
+    format!("Image {} \u{d7} {}", image.width, image.height)
+}
+
+/// Lays out `clips` (already in display order) the way Clipy does: numbering
 /// restarts at 1 inside each folder, while number shortcuts always belong to
 /// the first ten items overall.
-pub fn layout(texts: &[String], options: &MenuLayout) -> Vec<MenuEntry> {
+pub fn layout(clips: &[ClipContent], options: &MenuLayout) -> Vec<MenuEntry> {
     let per_folder = options.items_per_folder.max(1);
     let item = |position: usize, number: usize| {
-        let title = menu_title(&texts[position], options.title_length);
+        let (title, tooltip) = match &clips[position] {
+            ClipContent::Text(text) => {
+                let title = menu_title(text, options.title_length);
+                let tooltip = menu_tooltip(text, &title);
+                (title, tooltip)
+            }
+            ClipContent::Image(image) => (image_title(image), None),
+        };
         MenuItemModel {
             position,
-            tooltip: menu_tooltip(&texts[position], &title),
+            tooltip,
             label: if options.show_numbers {
                 format!("{number}. {title}")
             } else {
@@ -109,14 +124,14 @@ pub fn layout(texts: &[String], options: &MenuLayout) -> Vec<MenuEntry> {
         }
     };
 
-    let inline = options.items_inline.min(texts.len());
+    let inline = options.items_inline.min(clips.len());
     let mut entries: Vec<MenuEntry> = (0..inline)
         .map(|p| MenuEntry::Item(item(p, p + 1)))
         .collect();
 
     let mut start = inline;
-    while start < texts.len() {
-        let end = (start + per_folder).min(texts.len());
+    while start < clips.len() {
+        let end = (start + per_folder).min(clips.len());
         entries.push(MenuEntry::Folder {
             title: format!("{} - {}", start + 1, end),
             items: (start..end).map(|p| item(p, p - start + 1)).collect(),

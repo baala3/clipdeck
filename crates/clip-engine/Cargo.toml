@@ -7,8 +7,11 @@ license = "MIT"
 [dependencies]
 rusqlite = { version = "0.31", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
+png = "0.18"
+sha2 = "0.10"
 toml = "1"
 toml_edit = "0.25"
 
 [dev-dependencies]
+png = "0.18"
 tempfile = "3"

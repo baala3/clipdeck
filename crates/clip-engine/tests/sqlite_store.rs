@@ -1,4 +1,15 @@
-use clip_engine::{Clip, ClipContent, ClipStore, PinnedStore, SqliteClipStore, SqlitePinnedStore};
+use clip_engine::{
+    Clip, ClipContent, ClipStore, ImageInfo, PinnedStore, SqliteClipStore, SqlitePinnedStore,
+};
+
+fn image_info(digest: &str) -> ImageInfo {
+    ImageInfo {
+        digest: digest.into(),
+        width: 640,
+        height: 480,
+        byte_len: 1234,
+    }
+}
 
 #[test]
 fn sqlite_store_persists_clips_across_separate_connections() {
@@ -100,14 +111,14 @@ fn sqlite_pinned_store_reports_whether_it_contains_some_content() {
         source_app: None,
     });
     store.push(Clip {
-        content: ClipContent::Image(vec![1, 2, 3]),
+        content: ClipContent::Image(image_info("aaa")),
         source_app: None,
     });
 
     assert!(store.contains(&ClipContent::Text("kept".into())));
     assert!(!store.contains(&ClipContent::Text("other".into())));
-    assert!(store.contains(&ClipContent::Image(vec![1, 2, 3])));
-    assert!(!store.contains(&ClipContent::Image(vec![9])));
+    assert!(store.contains(&ClipContent::Image(image_info("aaa"))));
+    assert!(!store.contains(&ClipContent::Image(image_info("bbb"))));
 }
 
 #[test]
@@ -137,6 +148,71 @@ fn sqlite_pinned_store_replaces_a_clip_in_place() {
             ClipContent::Text("one".into()),
             ClipContent::Text("TWO".into()),
             ClipContent::Text("three".into())
+        ]
+    );
+}
+
+#[test]
+fn sqlite_stores_persist_image_clips_with_their_size() {
+    let dir = tempfile::tempdir().unwrap();
+    let history_path = dir.path().join("clips.sqlite3");
+    let pinned_path = dir.path().join("pinned.sqlite3");
+    let clip = Clip {
+        content: ClipContent::Image(image_info("aaa")),
+        source_app: Some("Preview".into()),
+    };
+    SqliteClipStore::open(&history_path).push(clip.clone());
+    SqlitePinnedStore::open(&pinned_path).push(clip.clone());
+
+    for stored in [
+        SqliteClipStore::open(&history_path).all(),
+        SqlitePinnedStore::open(&pinned_path).all(),
+    ] {
+        assert_eq!(stored, vec![clip.clone()]);
+        let ClipContent::Image(image) = &stored[0].content else {
+            panic!("expected an image")
+        };
+        assert_eq!(
+            (image.width, image.height, image.byte_len),
+            (640, 480, 1234)
+        );
+    }
+}
+
+#[test]
+fn a_store_from_before_image_capture_keeps_its_clips_and_takes_images() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("clips.sqlite3");
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE clips (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                text TEXT,
+                image BLOB,
+                source_app TEXT
+            );
+            INSERT INTO clips (text, source_app) VALUES ('old', 'Notes');",
+        )
+        .unwrap();
+    }
+
+    let mut store = SqliteClipStore::open(&path);
+    store.push(Clip {
+        content: ClipContent::Image(image_info("aaa")),
+        source_app: None,
+    });
+
+    let contents: Vec<ClipContent> = SqliteClipStore::open(&path)
+        .all()
+        .into_iter()
+        .map(|clip| clip.content)
+        .collect();
+    assert_eq!(
+        contents,
+        vec![
+            ClipContent::Text("old".into()),
+            ClipContent::Image(image_info("aaa"))
         ]
     );
 }
