@@ -16,9 +16,9 @@ fn loading_a_missing_settings_file_creates_it_with_the_defaults() {
         Settings {
             launch_at_login: true,
             appearance: Appearance::System,
-            main_hotkey: "CommandOrControl+Shift+V".into(),
-            history_hotkey: "CommandOrControl+Alt+V".into(),
-            pinned_hotkey: "CommandOrControl+Shift+B".into(),
+            main_hotkey: "CommandOrControl+Shift+D".into(),
+            history_hotkey: "CommandOrControl+Shift+H".into(),
+            pinned_hotkey: "CommandOrControl+Shift+P".into(),
             clear_history_hotkey: "".into(),
             history_capacity: 200,
             excluded_apps: vec![],
@@ -180,6 +180,7 @@ fn appearance_follows_the_system_unless_the_settings_file_picks_one() {
 #[test]
 fn no_two_bound_hotkeys_may_be_the_same() {
     let settings = Settings {
+        main_hotkey: "CommandOrControl+Shift+V".into(),
         clear_history_hotkey: "CommandOrControl+Shift+V".into(),
         ..Settings::default()
     };

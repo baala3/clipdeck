@@ -331,7 +331,7 @@ try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dat
           </li>
           <li>
             <div>
-              <h3>Press <kbd data-mod>Ctrl</kbd> <kbd>Shift</kbd> <kbd>V</kbd></h3>
+              <h3>Press <kbd data-mod>Ctrl</kbd> <kbd>Shift</kbd> <kbd>D</kbd></h3>
               <p>The menu opens at your cursor with History and Pinned together. Long Clips are shortened to one line, and older ones are tucked into folders.</p>
             </div>
           </li>
@@ -349,9 +349,9 @@ try { if (localStorage.getItem('theme') === 'dark') document.documentElement.dat
         <div class="body" aria-hidden="true">
           <h4>Hotkeys</h4>
           <div class="panel">
-            <div class="row"><span>Open menu (History and Pinned)</span><span class="keys"><kbd data-mod>Ctrl</kbd><kbd>Shift</kbd><kbd>V</kbd></span></div>
-            <div class="row"><span>Open History menu</span><span class="keys"><kbd data-mod>Ctrl</kbd><kbd data-alt>Alt</kbd><kbd>V</kbd></span></div>
-            <div class="row"><span>Open Pinned menu</span><span class="keys"><kbd data-mod>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd></span></div>
+            <div class="row"><span>Open menu (History and Pinned)</span><span class="keys"><kbd data-mod>Ctrl</kbd><kbd>Shift</kbd><kbd>D</kbd></span></div>
+            <div class="row"><span>Open History menu</span><span class="keys"><kbd data-mod>Ctrl</kbd><kbd>Shift</kbd><kbd>H</kbd></span></div>
+            <div class="row"><span>Open Pinned menu</span><span class="keys"><kbd data-mod>Ctrl</kbd><kbd>Shift</kbd><kbd>P</kbd></span></div>
           </div>
           <h4>History</h4>
           <div class="panel">
@@ -468,7 +468,6 @@ if (isMac) {
   document.querySelectorAll('[data-mod]').forEach((el) => {
     el.textContent = el.textContent.replace('Ctrl+', '⌘').replace('Ctrl', '⌘');
   });
-  document.querySelectorAll('[data-alt]').forEach((el) => { el.textContent = '⌥'; });
 }
 const os = isMac ? 'mac' : isWindows ? 'windows' : null;
 document.querySelector(`.card[data-os="${os}"]`)?.classList.add('suggested');
