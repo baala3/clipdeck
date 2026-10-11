@@ -1,4 +1,7 @@
-use clip_engine::menu::{layout, menu_title, menu_tooltip, MenuEntry, MenuItemModel, MenuLayout};
+use clip_engine::menu::{
+    history_clip_actions, layout, menu_title, menu_tooltip, pinned_clip_actions, ClipAction,
+    MenuEntry, MenuItemModel, MenuLayout,
+};
 use clip_engine::{ClipContent, ImageInfo};
 
 fn texts(n: usize) -> Vec<ClipContent> {
@@ -226,5 +229,62 @@ fn an_image_is_titled_by_its_size_and_has_no_tooltip() {
     assert_eq!(
         entries[1],
         MenuEntry::Item(item(1, "2. Image 1920 \u{d7} 1080", Some('2')))
+    );
+}
+
+fn image() -> ClipContent {
+    ClipContent::Image(ImageInfo {
+        digest: "abc".into(),
+        width: 10,
+        height: 10,
+        byte_len: 0,
+    })
+}
+
+#[test]
+fn a_history_clip_can_be_edited_pinned_or_deleted_from_its_actions_menu() {
+    use ClipAction::*;
+    let text = ClipContent::Text("hi".into());
+
+    assert_eq!(history_clip_actions(&text, false), vec![Edit, Pin, Delete]);
+    assert_eq!(
+        history_clip_actions(&text, true),
+        vec![Edit, Unpin, Delete],
+        "one that's pinned already can be unpinned from History too"
+    );
+    assert_eq!(
+        history_clip_actions(&image(), false),
+        vec![Pin, Delete],
+        "an image has nothing to edit"
+    );
+    assert_eq!(history_clip_actions(&image(), true), vec![Unpin, Delete]);
+}
+
+#[test]
+fn a_pinned_item_can_be_unpinned_edited_or_deleted_from_its_actions_menu() {
+    use ClipAction::*;
+
+    assert_eq!(
+        pinned_clip_actions(&ClipContent::Text("hi".into())),
+        vec![Unpin, Edit, Delete]
+    );
+    assert_eq!(
+        pinned_clip_actions(&image()),
+        vec![Unpin, Delete],
+        "an image has nothing to edit"
+    );
+}
+
+#[test]
+fn pasting_is_not_an_action_since_choosing_the_clip_does_that() {
+    let offered: Vec<&str> = history_clip_actions(&ClipContent::Text("hi".into()), false)
+        .into_iter()
+        .chain(pinned_clip_actions(&ClipContent::Text("hi".into())))
+        .map(ClipAction::label)
+        .collect();
+
+    assert_eq!(
+        offered,
+        vec!["Edit", "Pin", "Delete", "Unpin", "Edit", "Delete"]
     );
 }

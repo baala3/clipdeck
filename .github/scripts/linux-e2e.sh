@@ -80,7 +80,7 @@ check "copying something again moves it to the top" test "$(history | tr '\n' '|
 echo "--- menu"
 xdotool search --name "paste target" windowactivate --sync
 xdotool mousemove 700 150
-hotkey ctrl+shift+v
+hotkey ctrl+shift+d
 shot 2-menu
 check "the hotkey opens a menu" test "$(xdotool search --onlyvisible --class clipdeck 2> /dev/null | wc -l)" -ge 1
 
@@ -97,13 +97,13 @@ check "and moves it to the top of History" test "$(newest)" = "second clip"
 check "and pastes it into the app underneath" test "$(cat "$work/pasted.txt")" = "second clip"
 
 echo "--- pin"
-hotkey ctrl+shift+v
+hotkey ctrl+shift+d
 shot 4b-second-menu
 # Shift held while clicking the second row, the "first clip".
 xdotool keydown shift mousemove 760 216 click 1 keyup shift
 sleep 2
 check "Shift+choosing pins the Clip" test "$(pinned)" = "first clip"
-hotkey ctrl+shift+b
+hotkey ctrl+shift+p
 shot 5-pinned-menu
 xdotool key Escape
 
@@ -112,7 +112,7 @@ check "and pastes nothing" test "$(cat "$work/pasted.txt")" = "second clip"
 xdotool mousemove 700 150
 
 echo "--- image"
-hotkey ctrl+shift+v
+hotkey ctrl+shift+d
 # "second clip", "first clip", then the image.
 xdotool key Down Down Down Return
 sleep 2
@@ -122,7 +122,7 @@ check "and moves it to the top" test "$(newest)" = "image 320x200"
 shot 6-end
 
 echo "--- number shortcut"
-hotkey ctrl+shift+v
+hotkey ctrl+shift+d
 xdotool key ctrl+2
 sleep 2
 shot 7-after-ctrl-2

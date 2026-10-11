@@ -97,7 +97,7 @@ LAUNCHER
 
   echo "Installed Clipdeck to $app"
   nohup "$app" > /dev/null 2>&1 &
-  echo "Clipdeck is running. Look for it in the system tray, or press Ctrl+Shift+V."
+  echo "Clipdeck is running. Look for it in the system tray, or press Ctrl+Shift+D."
 }
 
 case "$(uname -s)" in

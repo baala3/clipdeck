@@ -305,7 +305,9 @@ pub async fn set_hotkeys_suspended(
 
 /// Opens the Settings Window, optionally at a section: "pinned" for the menu's
 /// "Edit Pinned..." item, "pinned-new" for "New Pinned Item..." (opens an empty
-/// pinned-item editor there).
+/// pinned-item editor there), "pinned-edit:3" for a pinned item's own "Edit"
+/// (opens the editor of the item at that index), "pinned-draft:some text" for
+/// a History Clip's "Edit" (opens a new pinned-item editor holding that text).
 pub fn show_settings_window_at(app: &AppHandle, section: Option<&str>) {
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW) {
         let _ = window.unminimize();

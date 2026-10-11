@@ -3,7 +3,9 @@
 //! of their items is chosen.
 
 use crate::{settings, AppState};
-use clip_engine::menu::{layout, HeldModifiers, MenuEntry, MenuItemModel, MenuTip};
+#[cfg(windows)]
+use clip_engine::menu::{history_clip_actions, pinned_clip_actions};
+use clip_engine::menu::{layout, ClipAction, HeldModifiers, MenuEntry, MenuItemModel, MenuTip};
 use clip_engine::{ClipContent, Rgba, Settings, ShortcutModifier};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -42,11 +44,30 @@ struct Target {
     content: ClipContent,
 }
 
+/// Where a Clip's row sits in a built menu: its position, and for a row in a
+/// folder, its position inside the folder at that position.
+#[cfg(windows)]
+type Row = (usize, Option<usize>);
+
+/// What each Clip's row acts on, and the actions its actions menu lists.
+#[cfg(windows)]
+type ClipRows = HashMap<Row, (Target, Vec<ClipAction>)>;
+
 /// Item ids of the menus that currently exist, mapped to their targets.
 #[derive(Default)]
 pub struct MenuTargets {
     tray: HashMap<String, Target>,
     popup: HashMap<String, Target>,
+    /// The same menus' Clips by row, which is how Windows reports an action
+    /// chosen from a Clip's actions menu (ADR-0011).
+    #[cfg(windows)]
+    tray_rows: ClipRows,
+    #[cfg(windows)]
+    popup_rows: ClipRows,
+    /// The action chosen from the open popup's actions menu, carried out
+    /// once the popup has closed.
+    #[cfg(windows)]
+    popup_action: Option<(Target, ClipAction)>,
 }
 
 const CLEAR_HISTORY: &str = "clear_history";
@@ -116,6 +137,8 @@ struct BuiltMenu {
     /// native menu; elsewhere each one is its item's icon already.
     #[cfg(windows)]
     images: Vec<clip_windows::MenuImage>,
+    #[cfg(windows)]
+    clip_rows: ClipRows,
 }
 
 /// Appends rows to a menu while keeping each row's tooltip at its position.
@@ -151,6 +174,8 @@ fn build(
     let mut digits = HashMap::new();
     #[cfg(windows)]
     let mut images = Vec::new();
+    #[cfg(windows)]
+    let mut clip_rows = ClipRows::new();
     let mut section = |rows: &mut Rows,
                        title: &str,
                        list: List,
@@ -218,27 +243,38 @@ fn build(
             // Rows are counted by their tooltips, one per row.
             #[cfg(windows)]
             let row = rows.tips.len();
+            // What Windows adds to a Clip's row: a thumbnail, and its actions.
             #[cfg(windows)]
-            let mut image = |model: &MenuItemModel, folder_row: Option<usize>| {
-                if let Some(thumbnail) = thumbnail(snap, &clips[model.position]) {
+            let mut clip_row = |model: &MenuItemModel, folder_row: Option<usize>| {
+                let content = &clips[model.position];
+                if let Some(thumbnail) = thumbnail(snap, content) {
                     images.push(clip_windows::MenuImage {
                         row,
                         folder_row,
                         image: thumbnail.clone(),
                     });
                 }
+                let actions = match list {
+                    List::History => history_clip_actions(content, snap.pinned.contains(content)),
+                    List::Pinned => pinned_clip_actions(content),
+                };
+                let target = Target {
+                    list,
+                    content: content.clone(),
+                };
+                clip_rows.insert((row, folder_row), (target, actions));
             };
             match entry {
                 MenuEntry::Item(model) => {
                     #[cfg(windows)]
-                    image(&model, None);
-                    let tip = model.tooltip.clone().map_or(MenuTip::None, MenuTip::Text);
+                    clip_row(&model, None);
+                    let tip = tip(&model, &clips[model.position]);
                     rows.push(item(&model)?.as_ref(), tip)?;
                 }
                 MenuEntry::Folder { title, items } => {
                     #[cfg(windows)]
                     for (folder_row, model) in items.iter().enumerate() {
-                        image(model, Some(folder_row));
+                        clip_row(model, Some(folder_row));
                     }
                     let built: Vec<Box<dyn IsMenuItem<Wry>>> =
                         items.iter().map(&mut item).collect::<tauri::Result<_>>()?;
@@ -246,7 +282,12 @@ fn build(
                         built.iter().map(|item| item.as_ref()).collect();
                     rows.push(
                         &Submenu::with_items(app, title, true, &refs)?,
-                        MenuTip::Folder(items.into_iter().map(|model| model.tooltip).collect()),
+                        MenuTip::Folder(
+                            items
+                                .iter()
+                                .map(|model| tip(model, &clips[model.position]))
+                                .collect(),
+                        ),
                     )?;
                 }
             }
@@ -341,7 +382,18 @@ fn build(
         tips,
         #[cfg(windows)]
         images,
+        #[cfg(windows)]
+        clip_rows,
     })
+}
+
+/// What resting on a Clip's row shows: an image in full, or all of a text
+/// whose label was shortened.
+fn tip(model: &MenuItemModel, content: &ClipContent) -> MenuTip {
+    match content {
+        ClipContent::Image(image) => MenuTip::Image(image.digest.clone()),
+        ClipContent::Text(_) => model.tooltip.clone().map_or(MenuTip::None, MenuTip::Text),
+    }
 }
 
 /// The thumbnail to show beside `content` in a menu, if it's an image.
@@ -409,10 +461,12 @@ fn show_popup(app: &AppHandle, kind: MenuKind) {
         #[cfg(windows)]
         {
             decorate(
+                app,
                 clip_windows::MenuSlot::Popup,
                 &built.menu,
                 built.tips,
                 built.images,
+                built.clip_rows,
             );
             let hook = clip_windows::MenuKeyHook::install(snap.settings.number_shortcut_modifier);
             if let Err(err) = host.popup_menu(&built.menu) {
@@ -422,9 +476,15 @@ fn show_popup(app: &AppHandle, kind: MenuKind) {
             drop(hook);
             clip_windows::clear_menu_tips(clip_windows::MenuSlot::Popup);
             clip_windows::clear_menu_images(clip_windows::MenuSlot::Popup);
+            clip_windows::clear_menu_actions(clip_windows::MenuSlot::Popup);
             // Give focus back right away; a chosen item pastes into it afterwards.
             clip_windows::restore_foreground(previous);
-            if let Some(target) = picked.and_then(|digit| built.digits.get(&digit)) {
+            let action = state.menu_targets.lock().unwrap().popup_action.take();
+            if let Some((target, action)) = action {
+                // The Enter or click that chose it was in the actions menu.
+                clip_windows::take_activation_modifiers();
+                perform(app, &target, action);
+            } else if let Some(target) = picked.and_then(|digit| built.digits.get(&digit)) {
                 paste(app, target, true);
             }
         }
@@ -508,10 +568,12 @@ pub fn refresh_tray_menu(app: &AppHandle) {
                 handle.state::<AppState>().menu_targets.lock().unwrap().tray = built.targets;
                 #[cfg(windows)]
                 decorate(
+                    &handle,
                     clip_windows::MenuSlot::Tray,
                     &built.menu,
                     built.tips,
                     built.images,
+                    built.clip_rows,
                 );
                 if let Some(tray) = handle.tray_by_id(TRAY_ID) {
                     let _ = tray.set_menu(Some(built.menu));
@@ -529,29 +591,111 @@ pub fn build_initial_tray_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     app.state::<AppState>().menu_targets.lock().unwrap().tray = built.targets;
     #[cfg(windows)]
     decorate(
+        app,
         clip_windows::MenuSlot::Tray,
         &built.menu,
         built.tips,
         built.images,
+        built.clip_rows,
     );
     Ok(built.menu)
 }
 
-/// Hands a menu's tooltips and thumbnails to the Windows adapter, which shows
-/// the tooltips on hover and draws the thumbnails in their rows. Must run on
-/// the main thread, where menus are shown.
+/// Hands a menu's tooltips, thumbnails, and Clips' actions to the Windows
+/// adapter, which shows the tooltips on hover, draws the thumbnails in their
+/// rows, and opens a Clip's actions menu on a right-click or the Right arrow.
+/// Must run on the main thread, where menus are shown.
 #[cfg(windows)]
 fn decorate(
+    app: &AppHandle,
     slot: clip_windows::MenuSlot,
     menu: &Menu<Wry>,
     tips: Vec<MenuTip>,
     images: Vec<clip_windows::MenuImage>,
+    clip_rows: ClipRows,
 ) {
     use tauri::menu::ContextMenu;
     if let Ok(hmenu) = menu.hpopupmenu() {
         clip_windows::set_menu_tips(slot, hmenu, tips);
         clip_windows::set_menu_images(slot, hmenu, images);
+        let actions = clip_rows
+            .iter()
+            .map(
+                |(&(row, folder_row), (_, actions))| clip_windows::MenuRowActions {
+                    row,
+                    folder_row,
+                    labels: actions.iter().map(|action| action.label().into()).collect(),
+                },
+            )
+            .collect();
+        clip_windows::set_menu_actions(slot, hmenu, actions);
     }
+    let state = app.state::<AppState>();
+    let mut targets = state.menu_targets.lock().unwrap();
+    match slot {
+        clip_windows::MenuSlot::Tray => targets.tray_rows = clip_rows,
+        clip_windows::MenuSlot::Popup => {
+            targets.popup_rows = clip_rows;
+            targets.popup_action = None;
+        }
+    }
+}
+
+/// Lets the menus show an image Clip in full when its row is rested on. Call
+/// it once, on the main thread.
+#[cfg(windows)]
+pub fn provide_image_previews(app: &AppHandle) {
+    let app = app.clone();
+    clip_windows::on_image_preview(move |digest| {
+        let png = {
+            let state = app.state::<AppState>();
+            let engine = state.engine.lock().unwrap();
+            let image = engine
+                .history()
+                .into_iter()
+                .chain(engine.pinned())
+                .find_map(|clip| match clip.content {
+                    ClipContent::Image(image) if image.digest == digest => Some(image),
+                    _ => None,
+                })?;
+            engine.image_png(&image)?
+        };
+        Rgba::from_png(&png)
+    });
+}
+
+/// Starts carrying out what's chosen from a Clip's actions menu. Call it
+/// once, on the main thread.
+#[cfg(windows)]
+pub fn watch_menu_actions(app: &AppHandle) {
+    let app = app.clone();
+    clip_windows::on_menu_action(move |picked| {
+        let state = app.state::<AppState>();
+        let mut targets = state.menu_targets.lock().unwrap();
+        let rows = match picked.slot {
+            clip_windows::MenuSlot::Tray => &targets.tray_rows,
+            clip_windows::MenuSlot::Popup => &targets.popup_rows,
+        };
+        let Some((target, action)) = rows
+            .get(&(picked.row, picked.folder_row))
+            .and_then(|(target, actions)| Some((target.clone(), *actions.get(picked.action)?)))
+        else {
+            return;
+        };
+        match picked.slot {
+            // `show_popup` is still waiting for the menu to close, and gives
+            // focus back before anything is pasted.
+            clip_windows::MenuSlot::Popup => targets.popup_action = Some((target, action)),
+            // Nothing waits on the tray menu, so the work is queued behind it.
+            clip_windows::MenuSlot::Tray => {
+                let app = app.clone();
+                std::thread::spawn(move || {
+                    let handle = app.clone();
+                    let _ = app.run_on_main_thread(move || perform(&handle, &target, action));
+                });
+            }
+        }
+    });
 }
 
 pub fn handle_menu_event(app: &AppHandle, id: &str) {
@@ -602,16 +746,66 @@ fn activate(app: &AppHandle, target: &Target, held: HeldModifiers, paste_into_pr
         .unwrap()
         .clone();
     if settings.delete_modifier.is_held(held) {
-        with_target_index(app, target, |engine, list, index| match list {
-            List::History => engine.delete(index),
-            List::Pinned => engine.unpin(index),
-        });
-        refresh_tray_menu(app);
+        perform(app, target, ClipAction::Delete);
     } else if target.list == List::History && settings.pin_modifier.is_held(held) {
-        with_target_index(app, target, |engine, _, index| engine.pin(index));
-        refresh_tray_menu(app);
+        perform(app, target, ClipAction::Pin);
     } else {
         paste(app, target, paste_into_previous);
+    }
+}
+
+/// Carries out `action` on the target, whether it was asked for with a
+/// modifier+click or from the Clip's actions menu.
+fn perform(app: &AppHandle, target: &Target, action: ClipAction) {
+    let state = app.state::<AppState>();
+    let editor = {
+        let mut engine = state.engine.lock().unwrap();
+        let index_in = |engine: &crate::Engine, list: List| {
+            let clips = match list {
+                List::History => engine.history(),
+                List::Pinned => engine.pinned(),
+            };
+            clips.iter().position(|clip| clip.content == target.content)
+        };
+        match action {
+            ClipAction::Pin => {
+                if let Some(index) = index_in(&engine, List::History) {
+                    engine.pin(index);
+                }
+                None
+            }
+            ClipAction::Unpin => {
+                if let Some(index) = index_in(&engine, List::Pinned) {
+                    engine.unpin(index);
+                }
+                None
+            }
+            // A History Clip goes from History and stays pinned if it was; a
+            // pinned item goes from both lists.
+            ClipAction::Delete => {
+                if target.list == List::Pinned {
+                    if let Some(index) = index_in(&engine, List::Pinned) {
+                        engine.unpin(index);
+                    }
+                }
+                if let Some(index) = index_in(&engine, List::History) {
+                    engine.delete(index);
+                }
+                None
+            }
+            // A menu can't hold a text box, so editing happens in Settings:
+            // in the pinned item's editor, or for a Clip that isn't pinned,
+            // in a new pinned item that starts with its text.
+            ClipAction::Edit => match (index_in(&engine, List::Pinned), &target.content) {
+                (Some(index), _) => Some(format!("pinned-edit:{index}")),
+                (None, ClipContent::Text(text)) => Some(format!("pinned-draft:{text}")),
+                (None, ClipContent::Image(_)) => None,
+            },
+        }
+    };
+    match editor {
+        Some(section) => settings::show_settings_window_at(app, Some(&section)),
+        None => refresh_tray_menu(app),
     }
 }
 

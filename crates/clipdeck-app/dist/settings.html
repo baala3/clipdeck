@@ -553,6 +553,7 @@ document.querySelectorAll('.unbind').forEach((button) => {
 // Pinned items: written, edited, and removed here.
 let pinnedItems = [];
 let editing = null; // null, 'new', or the index of the item being edited
+let draft = ''; // what a new item's editor starts with
 
 function pinnedEditor(initial, onSave) {
   const editor = document.createElement('form');
@@ -610,7 +611,7 @@ function renderPinned() {
   if (editing === 'new') {
     const li = document.createElement('li');
     li.className = 'editing';
-    li.appendChild(pinnedEditor('', (text) => invoke('add_pinned', { text })));
+    li.appendChild(pinnedEditor(draft, (text) => invoke('add_pinned', { text })));
     pinnedList.appendChild(li);
   }
   if (pinnedItems.length === 0 && editing !== 'new') {
@@ -682,6 +683,7 @@ async function loadPinned() {
 }
 
 document.getElementById('pinned-new').addEventListener('click', () => {
+  draft = '';
   editing = 'new';
   renderPinned();
 });
@@ -691,11 +693,20 @@ listen('pinned-changed', () => {
   if (editing === null) loadPinned();
 });
 
-listen('show-section', (event) => {
-  const section = event.payload === 'pinned-new' ? 'pinned' : event.payload;
-  if (event.payload === 'pinned-new') {
+listen('show-section', async (event) => {
+  // "pinned-new" opens an empty editor, "pinned-draft:some text" one that
+  // starts with that text, and "pinned-edit:3" the editor of item 3.
+  const colon = event.payload.indexOf(':');
+  const target = colon < 0 ? event.payload : event.payload.slice(0, colon);
+  const detail = colon < 0 ? '' : event.payload.slice(colon + 1);
+  const section = target.startsWith('pinned') ? 'pinned' : target;
+  if (target === 'pinned-new' || target === 'pinned-draft') {
+    draft = detail;
     editing = 'new';
     renderPinned();
+  } else if (target === 'pinned-edit') {
+    editing = Number(detail);
+    await loadPinned();
   }
   document.getElementById(`${section}-section`)?.scrollIntoView({ block: 'start' });
 });

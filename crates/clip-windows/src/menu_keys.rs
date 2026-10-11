@@ -85,7 +85,8 @@ impl Drop for MenuKeyHook {
 }
 
 unsafe extern "system" fn menu_filter(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
-    if code == MSGF_MENU as i32 {
+    // A Clip's actions menu has no number shortcuts or modifier+click actions.
+    if code == MSGF_MENU as i32 && !crate::menu_actions::actions_menu_is_open() {
         let msg = &*(lparam.0 as *const MSG);
         let vk = msg.wParam.0 as u16;
         match msg.message {

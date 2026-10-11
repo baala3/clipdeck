@@ -9,7 +9,7 @@ A single entry automatically captured the moment the user copies something (text
 A copy that carries both text and an image is captured as its text.
 A copy is not captured when it is only whitespace, when its app marked it as not for clipboard tools (as password managers do), when its app is on the Exclusion list, or while capture is paused; copies made during a pause are not picked up afterwards either.
 A very large image (over 40 megapixels, or 20 MB as a PNG) is not captured either.
-See ADR-0010.
+See ADR-0012.
 _Avoid_: Entry, item, clipboard entry
 
 **History**:
@@ -31,7 +31,7 @@ Still out of scope as a separate concept. Plain user-written text lives in the P
 _Avoid_: Template (for v1 purposes, this concept doesn't exist yet)
 
 **Menu**:
-The native, Clipy-style menu a global hotkey opens at the mouse cursor: the main menu (History and Pinned together), or History or Pinned alone. Every menu ends with a single "More" submenu holding the app actions: New Pinned Item (which opens the Settings Window ready to write a new pinned item), Edit Pinned, Clear History, Pause capture, Settings, Quit. An image Clip shows as a thumbnail with its size ("Image 800 × 500"). Items are shortened to one line and, unless the user turns numbering off, numbered; past the first few they're grouped into "11 - 20" style folders. On Windows, resting on a shortened item shows the whole Clip in a tooltip beside the menu. Choosing an item copies it and pastes it into the app the user was working in: on Windows whatever was focused before the menu opened, on macOS the frontmost app, once Clipdeck has the Accessibility permission (ADR-0005), on Linux the window that has the keyboard once the menu closes. On Linux a hotkey opens its menu when its keys are let go, and Clipdeck runs in X11 sessions only (ADR-0011). Holding the delete or pin modifier while choosing deletes or pins it instead. The tray icon shows the same main menu. See ADR-0006 and ADR-0008.
+The native, Clipy-style menu a global hotkey opens at the mouse cursor: the main menu (History and Pinned together), or History or Pinned alone. Every menu ends with a single "More" submenu holding the app actions: New Pinned Item (which opens the Settings Window ready to write a new pinned item), Edit Pinned, Clear History, Pause capture, Settings, Quit. An image Clip shows as a thumbnail with its size ("Image 800 × 500"). Items are shortened to one line and, unless the user turns numbering off, numbered; past the first few they're grouped into "11 - 20" style folders. On Windows, resting on a shortened item shows the whole Clip in a tooltip beside the menu, resting on an image shows a larger picture of it there, and right-clicking a Clip or pressing the Right arrow on it opens its actions menu (Edit, Pin, Delete in History; Unpin, Edit, Delete in Pinned) while a plain click still pastes (ADR-0011). Choosing an item copies it and pastes it into the app the user was working in: on Windows whatever was focused before the menu opened, on macOS the frontmost app, once Clipdeck has the Accessibility permission (ADR-0005), on Linux the window that has the keyboard once the menu closes. On Linux a hotkey opens its menu when its keys are let go, and Clipdeck runs in X11 sessions only (ADR-0013). Holding the delete or pin modifier while choosing deletes or pins it instead. The tray icon shows the same main menu. See ADR-0006 and ADR-0008.
 _Avoid_: Popup, window, panel (reserve "window" for the Settings Window)
 
 **Settings Window**:
