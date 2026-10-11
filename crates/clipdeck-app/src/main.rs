@@ -211,7 +211,15 @@ fn main() {
             app.handle().plugin(
                 tauri_plugin_global_shortcut::Builder::new()
                     .with_handler(|app, shortcut, event| {
-                        if event.state() != ShortcutState::Pressed {
+                        // On X11 a pressed hotkey holds the keyboard until its
+                        // key is let go, and a menu can't open without the
+                        // keyboard, so there the hotkey acts on release.
+                        let trigger = if cfg!(target_os = "linux") {
+                            ShortcutState::Released
+                        } else {
+                            ShortcutState::Pressed
+                        };
+                        if event.state() != trigger {
                             return;
                         }
                         let action = app

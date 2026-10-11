@@ -28,6 +28,8 @@ history() { sqlite3 "$data/clipdeck-history.sqlite3" "select coalesce(text, 'ima
 pinned() { sqlite3 "$data/clipdeck-pinned.sqlite3" "select coalesce(text, 'image ' || image_width || 'x' || image_height) from pinned_clips order by id" 2> /dev/null; }
 newest() { history | tail -n 1; }
 # Copies the way an app does: xclip stays behind as the clipboard's owner.
+# Presses a hotkey the way a person does: held for a moment, not a few milliseconds.
+hotkey() { xdotool keydown "$1"; sleep 0.15; xdotool keyup "$1"; sleep 2; }
 copy_text() { printf '%s' "$1" | xclip -selection clipboard; sleep 1; }
 
 Xvfb :77 -screen 0 1280x800x24 > "$OUT/xvfb.log" 2>&1 &
@@ -73,8 +75,7 @@ check "copying something again moves it to the top" test "$(history | tr '\n' '|
 echo "--- menu"
 xdotool search --name "paste target" windowactivate --sync
 xdotool mousemove 700 150
-xdotool key ctrl+shift+v
-sleep 2
+hotkey ctrl+shift+v
 shot 2-menu
 check "the hotkey opens a menu" test "$(xdotool search --onlyvisible --class clipdeck 2> /dev/null | wc -l)" -ge 1
 
@@ -91,21 +92,19 @@ check "and moves it to the top of History" test "$(newest)" = "second clip"
 check "and pastes it into the app underneath" test "$(cat "$work/pasted.txt")" = "second clip"
 
 echo "--- pin"
-xdotool key ctrl+shift+v
-sleep 2
+hotkey ctrl+shift+v
+shot 4b-second-menu
 # Shift held while choosing the second row, the "first clip".
 xdotool key Down Down
 xdotool keydown shift key Return keyup shift
 sleep 2
 check "Shift+choosing pins the Clip" test "$(pinned)" = "first clip"
-xdotool key ctrl+shift+b
-sleep 2
+hotkey ctrl+shift+b
 shot 5-pinned-menu
 xdotool key Escape
 
 echo "--- image"
-xdotool key ctrl+shift+v
-sleep 2
+hotkey ctrl+shift+v
 # "second clip", "first clip", then the image.
 xdotool key Down Down Down Return
 sleep 2
@@ -116,7 +115,7 @@ shot 6-end
 
 echo "--- History"; history
 echo "--- Pinned"; pinned
-echo "--- app log"; cat "$OUT/app.log"
+echo "--- app log"; grep -a "panicked\|copied only\|couldn't\|can't watch" "$OUT/app.log"
 pkill -f "$app"; pkill -f target.py; pkill openbox; pkill Xvfb
 echo
 echo "$failures failed"
