@@ -141,6 +141,50 @@ pub fn layout(clips: &[ClipContent], options: &MenuLayout) -> Vec<MenuEntry> {
     entries
 }
 
+/// Something a Clip's actions menu offers: the menu that opens beside a Clip
+/// on a right-click or the Right arrow (ADR-0011).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClipAction {
+    Paste,
+    Pin,
+    Edit,
+    Delete,
+}
+
+impl ClipAction {
+    /// What the actions menu calls it. `pinned` says which list the Clip is
+    /// in; `pastes` is false where choosing a Clip only copies it (the tray
+    /// menu on Windows).
+    pub fn label(self, pinned: bool, pastes: bool) -> &'static str {
+        match self {
+            ClipAction::Paste if pastes => "Paste",
+            ClipAction::Paste => "Copy",
+            ClipAction::Pin => "Pin",
+            ClipAction::Edit => "Edit",
+            ClipAction::Delete if pinned => "Remove",
+            ClipAction::Delete => "Delete",
+        }
+    }
+}
+
+/// The actions a History Clip offers, in menu order. One that's pinned
+/// already has no Pin, since pinning it again would do nothing.
+pub fn history_clip_actions(already_pinned: bool) -> Vec<ClipAction> {
+    if already_pinned {
+        vec![ClipAction::Paste, ClipAction::Delete]
+    } else {
+        vec![ClipAction::Paste, ClipAction::Pin, ClipAction::Delete]
+    }
+}
+
+/// The actions a pinned item offers, in menu order. Only text can be edited.
+pub fn pinned_clip_actions(content: &ClipContent) -> Vec<ClipAction> {
+    match content {
+        ClipContent::Text(_) => vec![ClipAction::Paste, ClipAction::Edit, ClipAction::Delete],
+        ClipContent::Image(_) => vec![ClipAction::Paste, ClipAction::Delete],
+    }
+}
+
 /// Which modifier keys were down during a menu action. `command_or_control`
 /// is Ctrl on Windows and Command on macOS.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

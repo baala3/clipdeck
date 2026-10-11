@@ -42,7 +42,7 @@ const PADDING: (i32, i32) = (6, 4);
 
 /// Clipdeck keeps two menus alive at once: the tray menu, and whichever popup
 /// a hotkey opened last.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuSlot {
     Tray,
     Popup,
@@ -133,11 +133,15 @@ impl State {
             self.hide();
             return;
         }
-        let hover = self
-            .menus
-            .iter()
-            .flatten()
-            .find_map(|menu| highlighted(menu, &open));
+        // A Clip's actions menu opens where its tooltip would be.
+        let hover = if crate::menu_actions::actions_menu_is_open() {
+            None
+        } else {
+            self.menus
+                .iter()
+                .flatten()
+                .find_map(|menu| highlighted(menu, &open))
+        };
         if hover != self.hover {
             self.hide();
             self.hover_since = hover.is_some().then(Instant::now);
@@ -296,7 +300,7 @@ fn tool_info() -> TTTOOLINFOW {
 }
 
 /// This thread's visible menu windows, each with the menu it shows.
-unsafe fn open_menu_windows() -> Vec<(isize, isize)> {
+pub(crate) unsafe fn open_menu_windows() -> Vec<(isize, isize)> {
     let thread = GetCurrentThreadId();
     let mut open = Vec::new();
     let mut window = HWND::default();

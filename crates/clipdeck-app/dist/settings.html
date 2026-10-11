@@ -691,11 +691,16 @@ listen('pinned-changed', () => {
   if (editing === null) loadPinned();
 });
 
-listen('show-section', (event) => {
-  const section = event.payload === 'pinned-new' ? 'pinned' : event.payload;
-  if (event.payload === 'pinned-new') {
+listen('show-section', async (event) => {
+  // "pinned-new" opens an empty editor, "pinned-edit:3" the editor of item 3.
+  const [target, index] = event.payload.split(':');
+  const section = target.startsWith('pinned') ? 'pinned' : target;
+  if (target === 'pinned-new') {
     editing = 'new';
     renderPinned();
+  } else if (target === 'pinned-edit') {
+    editing = Number(index);
+    await loadPinned();
   }
   document.getElementById(`${section}-section`)?.scrollIntoView({ block: 'start' });
 });
