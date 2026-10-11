@@ -94,14 +94,17 @@ check "and pastes it into the app underneath" test "$(cat "$work/pasted.txt")" =
 echo "--- pin"
 hotkey ctrl+shift+v
 shot 4b-second-menu
-# Shift held while choosing the second row, the "first clip".
-xdotool key Down Down
-xdotool keydown shift key Return keyup shift
+# Shift held while clicking the second row, the "first clip".
+xdotool keydown shift mousemove 760 216 click 1 keyup shift
 sleep 2
 check "Shift+choosing pins the Clip" test "$(pinned)" = "first clip"
 hotkey ctrl+shift+b
 shot 5-pinned-menu
 xdotool key Escape
+
+check "which leaves History as it was" test "$(newest)" = "second clip"
+check "and pastes nothing" test "$(cat "$work/pasted.txt")" = "second clip"
+xdotool mousemove 700 150
 
 echo "--- image"
 hotkey ctrl+shift+v
@@ -112,6 +115,21 @@ check "choosing an image puts it on the clipboard" sh -c 'xclip -selection clipb
 check "without adding a second copy to History" test "$(history | grep -c '^image')" = 1
 check "and moves it to the top" test "$(newest)" = "image 320x200"
 shot 6-end
+
+echo "--- number shortcut"
+hotkey ctrl+shift+v
+xdotool key ctrl+2
+sleep 2
+shot 7-after-ctrl-2
+# Not a failure yet: GTK may not honor accelerators inside a popup menu.
+if [ "$(newest)" = "second clip" ]; then echo "note  Ctrl+2 picks the second Clip"; else echo "note  Ctrl+2 does NOT pick a Clip (History top: $(newest))"; xdotool key Escape; fi
+
+echo "--- settings"
+# Starting Clipdeck again hands over to the running one, which shows Settings.
+dbus-run-session -- "$app" > /dev/null 2>&1 &
+sleep 6
+shot 8-settings
+check "a second start shows the Settings window" sh -c 'xdotool search --onlyvisible --name "Clipdeck Settings" | grep -q .'
 
 echo "--- History"; history
 echo "--- Pinned"; pinned
