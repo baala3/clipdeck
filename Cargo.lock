@@ -609,6 +609,7 @@ dependencies = [
  "clip-linux",
  "clip-macos",
  "clip-windows",
+ "gdkx11",
  "gtk",
  "serde",
  "serde_json",

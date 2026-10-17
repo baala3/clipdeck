@@ -10,7 +10,8 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 base64 = "0.22"
 clip-engine = { path = "../clip-engine" }
-tauri = { version = "2", features = ["tray-icon"] }
+# macos-private-api: a see-through window, for the glass menu's Liquid Glass.
+tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-dialog = "2"
@@ -28,5 +29,6 @@ clip-macos = { path = "../clip-macos" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 clip-linux = { path = "../clip-linux" }
-# The same GTK that Tauri uses, for the number shortcuts in popup menus.
+# The same GTK that Tauri uses, to find the glass menu's X11 window.
 gtk = "0.18"
+gdkx11 = "0.18"

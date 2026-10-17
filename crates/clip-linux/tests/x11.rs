@@ -305,3 +305,54 @@ fn no_modifiers_are_held_when_no_keys_are_down() {
 
     assert_eq!(keys.held_modifiers(), HeldModifiers::default());
 }
+
+#[test]
+fn the_active_window_is_the_one_the_window_manager_names() {
+    let server = XServer::start();
+    let (conn, root) = server.connect();
+    let keys = X11Keys::connect(Some(&server.display)).unwrap();
+    assert_eq!(keys.active_window(), None, "no window manager, so none yet");
+
+    let editor = window(&conn, root, EventMask::NO_EVENT);
+    let active = common::atom(&conn, "_NET_ACTIVE_WINDOW");
+    conn.change_property32(
+        x11rb::protocol::xproto::PropMode::REPLACE,
+        root,
+        active,
+        x11rb::protocol::xproto::AtomEnum::WINDOW,
+        &[editor],
+    )
+    .unwrap();
+    conn.sync().unwrap();
+
+    assert_eq!(keys.active_window(), Some(editor));
+}
+
+#[test]
+fn activating_a_window_gives_it_the_keyboard_even_without_a_window_manager() {
+    let server = XServer::start();
+    let (conn, root) = server.connect();
+    let keys = X11Keys::connect(Some(&server.display)).unwrap();
+    let editor = window(&conn, root, EventMask::NO_EVENT);
+    conn.map_window(editor).unwrap();
+    conn.sync().unwrap();
+
+    assert!(keys.activate_window(editor));
+
+    assert_eq!(
+        conn.get_input_focus().unwrap().reply().unwrap().focus,
+        editor
+    );
+}
+
+#[test]
+fn a_window_that_is_gone_cannot_be_activated() {
+    let server = XServer::start();
+    let (conn, root) = server.connect();
+    let keys = X11Keys::connect(Some(&server.display)).unwrap();
+    let closed = window(&conn, root, EventMask::NO_EVENT);
+    conn.destroy_window(closed).unwrap();
+    conn.sync().unwrap();
+
+    assert!(!keys.activate_window(closed));
+}

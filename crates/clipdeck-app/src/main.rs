@@ -3,6 +3,7 @@
 mod autostart;
 mod clip_menu;
 mod pinned;
+mod popup;
 mod settings;
 mod updates;
 
@@ -10,7 +11,7 @@ use clip_engine::{
     adopt_legacy_store, ClipEngine, ClipboardSource, DirImageStore, Settings, SqliteClipStore,
     SqlitePinnedStore,
 };
-use clip_menu::{MenuKind, MenuTargets};
+use clip_menu::MenuKind;
 use settings::{HotkeyAction, Hotkeys, SettingsState, SETTINGS_WINDOW};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -31,14 +32,11 @@ struct AppState {
     active_settings: Mutex<Settings>,
     /// The hotkeys currently in effect, read by the global shortcut handler.
     hotkeys: Mutex<Hotkeys>,
-    /// Whatever window was focused right before a popup menu opened (Windows
-    /// HWND as a raw value; 0 means none captured). Focus goes back there, and
-    /// a chosen Clip is pasted into it.
-    #[cfg(windows)]
-    previous_foreground: Mutex<isize>,
-    menu_targets: Mutex<MenuTargets>,
-    /// A popup menu is modal; a hotkey pressed while one is open is ignored.
-    menu_open: AtomicBool,
+    /// The glass menu while it's open.
+    popup: Mutex<popup::PopupState>,
+    /// What each Clip in the Linux tray's native menu acts on, by item id.
+    #[cfg(target_os = "linux")]
+    tray_targets: Mutex<std::collections::HashMap<String, clip_menu::Target>>,
 }
 
 fn spawn_capture_thread(app: tauri::AppHandle, mut source: impl ClipboardSource + Send + 'static) {
@@ -62,9 +60,9 @@ fn spawn_capture_thread(app: tauri::AppHandle, mut source: impl ClipboardSource 
 
 fn on_hotkey(app: &tauri::AppHandle, action: HotkeyAction) {
     match action {
-        HotkeyAction::MainMenu => clip_menu::request_popup(app, MenuKind::Main),
-        HotkeyAction::HistoryMenu => clip_menu::request_popup(app, MenuKind::History),
-        HotkeyAction::PinnedMenu => clip_menu::request_popup(app, MenuKind::Pinned),
+        HotkeyAction::MainMenu => popup::request(app, MenuKind::Main, false),
+        HotkeyAction::HistoryMenu => popup::request(app, MenuKind::History, false),
+        HotkeyAction::PinnedMenu => popup::request(app, MenuKind::Pinned, false),
         HotkeyAction::ClearHistory => clip_menu::confirm_and_clear_history(app),
     }
 }
@@ -145,7 +143,15 @@ fn main() {
             pinned::edit_pinned,
             pinned::remove_pinned,
             pinned::edit_history_clip,
-            updates::check_for_updates
+            updates::check_for_updates,
+            popup::menu_shown,
+            popup::menu_resize,
+            popup::menu_choose,
+            popup::menu_digit,
+            popup::menu_action,
+            popup::menu_command,
+            popup::menu_dismiss,
+            popup::menu_preview
         ])
         .setup(|app| {
             // A menu bar app: no Dock icon or app menu, just the tray icon.
@@ -180,17 +186,13 @@ fn main() {
                 settings: Mutex::new(settings_state),
                 active_settings: Mutex::new(current),
                 hotkeys: Mutex::new(hotkeys),
-                #[cfg(windows)]
-                previous_foreground: Mutex::new(0),
-                menu_targets: Mutex::new(MenuTargets::default()),
-                menu_open: AtomicBool::new(false),
+                popup: Mutex::default(),
+                #[cfg(target_os = "linux")]
+                tray_targets: Mutex::default(),
             });
 
             settings::apply_appearance(app.handle(), current_appearance);
-            #[cfg(windows)]
-            clip_menu::watch_menu_actions(app.handle());
-            #[cfg(windows)]
-            clip_menu::provide_image_previews(app.handle());
+            popup::create_window(app)?;
 
             #[cfg(windows)]
             spawn_capture_thread(
@@ -205,13 +207,26 @@ fn main() {
                 Err(err) => eprintln!("can't watch the clipboard: {err}"),
             }
 
-            // Like Clipy, clicking the tray icon shows the full menu.
+            // Like Clipy, clicking the tray icon shows the full menu: the glass
+            // menu, or on Linux, where a tray icon reports no clicks, a native one.
             // The tray gets its own simplified icon, drawn to stay legible at 16px.
-            TrayIconBuilder::with_id(clip_menu::TRAY_ID)
+            let tray = TrayIconBuilder::with_id(clip_menu::TRAY_ID)
                 .icon(tauri::include_image!("icons/tray.png"))
-                .tooltip("Clipdeck")
-                .menu(&clip_menu::build_initial_tray_menu(app.handle())?)
-                .build(app)?;
+                .tooltip("Clipdeck");
+            #[cfg(target_os = "linux")]
+            let tray = tray.menu(&clip_menu::tray::build(app.handle())?);
+            #[cfg(not(target_os = "linux"))]
+            let tray = tray.on_tray_icon_event(|tray, event| {
+                use tauri::tray::{MouseButtonState, TrayIconEvent};
+                if let TrayIconEvent::Click {
+                    button_state: MouseButtonState::Up,
+                    ..
+                } = event
+                {
+                    popup::request(tray.app_handle(), MenuKind::Main, true);
+                }
+            });
+            tray.build(app)?;
 
             app.handle().plugin(
                 tauri_plugin_global_shortcut::Builder::new()
@@ -254,15 +269,21 @@ fn main() {
 
             Ok(())
         })
-        .on_menu_event(|app, event| clip_menu::handle_menu_event(app, event.id.as_ref()))
-        .on_window_event(|window, event| {
+        .on_menu_event(|_app, _event| {
+            #[cfg(target_os = "linux")]
+            clip_menu::tray::handle_menu_event(_app, _event.id.as_ref());
+        })
+        .on_window_event(|window, event| match event {
             // Closing Settings just hides it, so the app keeps running in the tray.
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == SETTINGS_WINDOW {
-                    api.prevent_close();
-                    let _ = window.hide();
-                }
+            WindowEvent::CloseRequested { api, .. } if window.label() == SETTINGS_WINDOW => {
+                api.prevent_close();
+                let _ = window.hide();
             }
+            // A click outside the glass menu closes it, like any menu.
+            WindowEvent::Focused(false) if window.label() == popup::MENU_WINDOW => {
+                popup::on_blur(window.app_handle());
+            }
+            _ => {}
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

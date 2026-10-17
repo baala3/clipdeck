@@ -10,10 +10,16 @@ fn texts(n: usize) -> Vec<ClipContent> {
         .collect()
 }
 
+/// An item as laid out; a label like "3. clip 3" is numbered 3 and titled "clip 3".
 fn item(position: usize, label: &str, digit: Option<char>) -> MenuItemModel {
+    let numbered = label
+        .split_once(". ")
+        .and_then(|(number, title)| Some((number.parse().ok()?, title)));
     MenuItemModel {
         position,
         label: label.into(),
+        title: numbered.map_or(label, |(_, title)| title).into(),
+        number: numbered.map(|(number, _)| number),
         shortcut_digit: digit,
         tooltip: None,
     }
@@ -286,5 +292,30 @@ fn pasting_is_not_an_action_since_choosing_the_clip_does_that() {
     assert_eq!(
         offered,
         vec!["Edit", "Pin", "Delete", "Unpin", "Edit", "Delete"]
+    );
+}
+
+#[test]
+fn the_number_is_also_kept_apart_from_the_title_for_a_numbers_column() {
+    let options = MenuLayout {
+        title_length: 20,
+        items_inline: 1,
+        items_per_folder: 10,
+        show_numbers: true,
+    };
+
+    let entries = layout(&texts(3), &options);
+
+    let MenuEntry::Folder { items, .. } = &entries[1] else {
+        panic!("expected a folder after the first item");
+    };
+    assert_eq!(
+        (
+            items[1].label.as_str(),
+            items[1].title.as_str(),
+            items[1].number
+        ),
+        ("2. clip 3", "clip 3", Some(2)),
+        "numbering restarts in each folder"
     );
 }

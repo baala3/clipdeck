@@ -235,22 +235,19 @@ fn apply(app: &AppHandle, state: &mut SettingsState, new: Settings) -> Result<()
         .reconfigure(new.engine_config());
     *app_state.active_settings.lock().unwrap() = new.clone();
     state.current = new;
-    // Menu layout and number shortcuts show up in the tray menu.
+    // Menu layout and number shortcuts show up in the Linux tray menu.
     crate::clip_menu::refresh_tray_menu(app);
     Ok(())
 }
 
-/// Gives the Settings Window and the native menus the chosen look. Tauri
-/// themes the window (and, on macOS, the menus with it); Windows popup menus
-/// need the adapter's help.
+/// Gives the Settings Window and the glass menu the chosen look; both pages
+/// follow the theme Tauri gives their windows.
 pub fn apply_appearance(app: &AppHandle, appearance: Appearance) {
     app.set_theme(match appearance {
         Appearance::System => None,
         Appearance::Light => Some(tauri::Theme::Light),
         Appearance::Dark => Some(tauri::Theme::Dark),
     });
-    #[cfg(windows)]
-    let _ = app.run_on_main_thread(move || clip_windows::set_menu_appearance(appearance));
 }
 
 pub fn register_initial_hotkeys(app: &AppHandle) -> Result<(), String> {

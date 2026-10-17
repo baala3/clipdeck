@@ -31,4 +31,4 @@ Two platform gaps shaped the implementation:
 Not carried over: Clipy's tooltips and image thumbnails on menu items (Tauri's menus support neither), and its Snippet folders (Clipdeck's Pinned list stays flat).
 macOS behavior is written but unverified, like the rest of the macOS adapter.
 
-**Status**: accepted
+**Status**: accepted; its native menus are now the glass menu of [ADR-0015](0015-glass-menu.md), except the Linux tray menu

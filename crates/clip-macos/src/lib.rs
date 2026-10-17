@@ -4,9 +4,9 @@ mod macos_adapter;
 #[cfg(target_os = "macos")]
 pub use macos_adapter::{copy_png, MacClipboardSource};
 #[cfg(target_os = "macos")]
-mod modifiers;
+mod focus;
 #[cfg(target_os = "macos")]
-pub use modifiers::held_modifiers;
+pub use focus::{activate_app, frontmost_app};
 #[cfg(target_os = "macos")]
 mod paste;
 #[cfg(target_os = "macos")]
