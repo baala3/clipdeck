@@ -94,9 +94,9 @@ fn text_clip(text: &str) -> IncomingClip {
 }
 
 #[test]
-fn default_engine_config_has_a_history_capacity_of_200() {
+fn default_engine_config_has_a_history_capacity_of_50() {
     let config = EngineConfig::default();
-    assert_eq!(config.history_capacity, 200);
+    assert_eq!(config.history_capacity, 50);
 }
 
 #[test]

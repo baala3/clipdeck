@@ -47,7 +47,7 @@ pub enum CaptureOutcome {
 }
 
 pub const MAX_HISTORY_CAPACITY: usize = 2000;
-pub(crate) const DEFAULT_HISTORY_CAPACITY: usize = 200;
+pub(crate) const DEFAULT_HISTORY_CAPACITY: usize = 50;
 /// How much disk the images in History may take together. A full History of
 /// large screenshots would otherwise run to gigabytes.
 pub const DEFAULT_HISTORY_IMAGE_BUDGET: u64 = 256 * 1024 * 1024;

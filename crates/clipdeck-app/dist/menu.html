@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Clipdeck</title>
+<link rel="stylesheet" href="glass-menu.css" />
+</head>
+<body>
+<div class="pane list" id="list" role="menu" aria-label="Clipdeck" tabindex="0"></div>
+
+<script src="glass-menu.js"></script>
+<script>
+// The glass menu (ADR-0015). This page owns everything the menu does: what
+// it shows, the highlight, the keys, and what the cascade beside it shows.
+// The cascade (cascade.html) only draws what it's told and reports the mouse.
+const { invoke } = window.__TAURI__.core;
+const { listen } = window.__TAURI__.event;
+const list = document.getElementById('list');
+
+// How long the pointer rests before a folder opens, or a Clip's full text
+// or picture shows, and before a cascade closes again; like native menus.
+const OPEN_DELAY = 150;
+const PREVIEW_DELAY = 450;
+const CLOSE_DELAY = 300;
+
+let model = null;
+let panelOnLeft = false;
+// The menu's rows (DOM nodes) and the open cascade's rows (plain data), and
+// which one is highlighted.
+let rows = { list: [], cascade: [] };
+let pane = 'list';
+let index = -1;
+// The open cascade: null, or { owner, kind, clip, inFolder } where owner is
+// the menu row it belongs to, kind is 'folder', 'more', 'actions' or
+// 'preview', and clip is whose actions or preview it is. A folder's Clip
+// shows its actions in the cascade too, with `inFolder` set so the arrow
+// key back returns to the folder.
+let cascade = null;
+let timer = null;
+
+function held(e) {
+  return {
+    commandOrControl: model.platform === 'macos' ? e.metaKey : e.ctrlKey,
+    alt: e.altKey,
+    shift: e.shiftKey,
+  };
+}
+
+// --- The menu's rows
+
+function menuRow(data, build) {
+  const row = GlassMenu.row(build);
+  row.data = data;
+  row.addEventListener('mouseenter', () => hover(row));
+  row.addEventListener('click', (e) => {
+    highlight('list', rows.list.indexOf(row));
+    choose(data, held(e));
+  });
+  if (data.clip) {
+    row.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showActions(row);
+    });
+  }
+  return row;
+}
+
+function render() {
+  list.replaceChildren();
+  rows = { list: [], cascade: [] };
+  const add = (node) => {
+    list.append(node);
+    rows.list.push(node);
+  };
+  if (model.pastingOff) {
+    add(menuRow({ command: 'allow_pasting' }, (row) => {
+      row.classList.add('notice');
+      row.textContent = 'Pasting is off. Allow it in Accessibility settings';
+    }));
+    list.append(GlassMenu.separator());
+  }
+  model.sections.forEach((section, i) => {
+    if (i > 0) list.append(GlassMenu.separator());
+    const heading = GlassMenu.heading(section.title);
+    if (i === 0 && model.paused) heading.append(GlassMenu.el('span', 'badge', 'Capture paused'));
+    list.append(heading);
+    if (section.entries.length === 0) list.append(GlassMenu.el('div', 'empty', 'Empty'));
+    for (const entry of section.entries) {
+      if (entry.type === 'clip') add(menuRow({ clip: entry }, (row) => GlassMenu.fillClip(row, entry)));
+      else add(menuRow({ folder: entry }, (row) => GlassMenu.fillSubmenu(row, entry.title)));
+    }
+  });
+  list.append(GlassMenu.separator());
+  add(menuRow({ more: true }, (row) => GlassMenu.fillSubmenu(row, 'More')));
+}
+
+// --- The cascade
+
+// What a cascade shows, as cascade.html takes it, with the data each row acts on.
+function cascadeContent(owner, kind, clip) {
+  const { folder } = owner.data;
+  if (kind === 'folder') {
+    return {
+      width: 260,
+      rows: folder.rows.map((row) => ({ kind: 'clip', clip: row, data: { clip: row } })),
+    };
+  }
+  if (kind === 'more') {
+    return {
+      width: 210,
+      rows: model.more.map((command) => command && {
+        kind: 'command', title: command.label, checked: command.checked, disabled: !command.enabled,
+        data: { command: command.id },
+      }),
+    };
+  }
+  if (kind === 'actions') {
+    return {
+      width: 170,
+      rows: clip.actions.map((action) => ({
+        kind: 'action', title: action, danger: action === 'Delete', data: { action, of: clip.id },
+      })),
+    };
+  }
+  return {
+    width: clip.image ? 320 : 360,
+    preview: clip.image ? { imageId: clip.id, title: clip.title } : { text: clip.tooltip },
+    rows: [],
+  };
+}
+
+function cascadeKind(row) {
+  const { clip, folder, more } = row.data;
+  if (folder) return 'folder';
+  if (more) return 'more';
+  if (clip && (clip.image || clip.tooltip)) return 'preview';
+  return null;
+}
+
+function openCascade(owner, kind, clip = owner.data.clip, inFolder = false) {
+  clearTimeout(timer);
+  if (cascade && cascade.owner === owner && cascade.kind === kind && cascade.clip === clip) return;
+  cascade = { owner, kind, clip, inFolder };
+  const content = cascadeContent(owner, kind, clip);
+  rows.cascade = content.rows.filter((row) => row && !row.disabled);
+  if (pane === 'cascade') { pane = 'list'; index = rows.list.indexOf(owner); }
+  // The cascade gets the rows without the data they act on; that stays here.
+  const drawn = content.rows.map((row) => row && { ...row, data: undefined, index: rows.cascade.indexOf(row) });
+  invoke('cascade_open', {
+    content: { ...content, rows: drawn, platform: model.platform },
+    rowTop: Math.max(0, owner.getBoundingClientRect().top - GlassMenu.PADDING),
+  });
+}
+
+function closeCascade() {
+  clearTimeout(timer);
+  if (!cascade) return;
+  cascade = null;
+  rows.cascade = [];
+  if (pane === 'cascade') { pane = 'list'; index = rows.list.indexOf(list.querySelector('.row.on')); }
+  invoke('cascade_close');
+}
+
+// A Clip's actions (ADR-0011), from a right-click or the arrow key toward the cascade.
+function showActions(row) {
+  highlight('list', rows.list.indexOf(row));
+  openCascade(row, 'actions');
+  if (rows.cascade.length) highlight('cascade', 0);
+}
+
+function showFolderActions(i) {
+  openCascade(cascade.owner, 'actions', rows.cascade[i].data.clip, true);
+  if (rows.cascade.length) highlight('cascade', 0);
+}
+
+// Back out of the cascade one step: from a folder Clip's actions to the
+// folder, otherwise to the menu.
+function back() {
+  const { owner, inFolder, clip } = cascade;
+  if (inFolder) {
+    openCascade(owner, 'folder');
+    highlight('cascade', rows.cascade.findIndex((row) => row.data.clip.id === clip.id));
+    return;
+  }
+  closeCascade();
+  highlight('list', rows.list.indexOf(owner));
+}
+
+// --- Highlight, hover and keys
+
+function highlight(newPane, newIndex) {
+  if (newPane === 'list') list.querySelectorAll('.row.on').forEach((row) => row.classList.remove('on'));
+  pane = newPane;
+  index = newIndex;
+  if (cascade) invoke('cascade_highlight', { index: pane === 'cascade' ? index : -1 });
+  const row = rows.list[index];
+  if (pane !== 'list' || !row) return;
+  row.classList.add('on');
+  list.setAttribute('aria-activedescendant', row.id);
+  row.scrollIntoView({ block: 'nearest' });
+}
+
+function hover(row) {
+  highlight('list', rows.list.indexOf(row));
+  clearTimeout(timer);
+  if (cascade && cascade.owner === row) return;
+  const kind = cascadeKind(row);
+  if (kind === 'folder' || kind === 'more') {
+    timer = setTimeout(() => openCascade(row, kind), OPEN_DELAY);
+  } else if (kind === 'preview') {
+    timer = setTimeout(() => openCascade(row, kind), cascade ? OPEN_DELAY : PREVIEW_DELAY);
+  } else if (cascade) {
+    timer = setTimeout(closeCascade, CLOSE_DELAY);
+  }
+}
+
+listen('cascade-input', ({ payload: input }) => {
+  if (!model || !cascade) return;
+  clearTimeout(timer);
+  const target = rows.cascade[input.index];
+  if (input.type === 'enter' && target) highlight('cascade', input.index);
+  else if (input.type === 'click' && target) choose(target.data, input.held);
+  else if (input.type === 'menu' && target?.data.clip && cascade.kind === 'folder') showFolderActions(input.index);
+});
+
+function move(step) {
+  const count = rows[pane].length;
+  if (count === 0) return;
+  const next = index < 0 ? (step > 0 ? 0 : count - 1) : (index + step + count) % count;
+  highlight(pane, next);
+  if (pane === 'list' && cascade && cascade.owner !== rows.list[next]) closeCascade();
+}
+
+function choose(data, heldKeys) {
+  const { clip, folder, more, command, action, of } = data;
+  if (clip) invoke('menu_choose', { id: clip.id, held: heldKeys });
+  else if (folder || more) enterCascade(rows.list[index], folder ? 'folder' : 'more');
+  else if (command) invoke('menu_command', { command });
+  else if (action) invoke('menu_action', { id: of, action });
+}
+
+function enterCascade(row, kind) {
+  openCascade(row, kind);
+  if (rows.cascade.length) highlight('cascade', 0);
+}
+
+window.addEventListener('keydown', (e) => {
+  if (!model) return;
+  const row = pane === 'list' ? rows.list[index] : null;
+  const item = pane === 'cascade' ? rows.cascade[index] : null;
+  const toward = panelOnLeft ? 'ArrowLeft' : 'ArrowRight';
+  const away = panelOnLeft ? 'ArrowRight' : 'ArrowLeft';
+  if (e.key === 'ArrowDown') move(1);
+  else if (e.key === 'ArrowUp') move(-1);
+  else if (e.key === 'Home') highlight(pane, 0);
+  else if (e.key === 'End') highlight(pane, rows[pane].length - 1);
+  else if (e.key === toward && row) {
+    const kind = cascadeKind(row);
+    if (kind === 'folder' || kind === 'more') enterCascade(row, kind);
+    else if (row.data.clip) showActions(row);
+  } else if (e.key === toward && item?.data.clip && cascade.kind === 'folder') showFolderActions(index);
+  else if ((e.key === away || e.key === 'Escape') && cascade) back();
+  else if (e.key === 'Escape') invoke('menu_dismiss');
+  else if ((e.key === 'Enter' || e.key === ' ') && (row || item)) {
+    if (row && (row.data.folder || row.data.more)) enterCascade(row, row.data.folder ? 'folder' : 'more');
+    else choose((row || item).data, held(e));
+  } else if (/^(Digit|Numpad)[0-9]$/.test(e.code)) {
+    invoke('menu_digit', { digit: e.code.slice(-1), held: held(e) });
+  } else if (e.key !== 'Tab') return;
+  e.preventDefault();
+});
+
+listen('menu-open', async ({ payload }) => {
+  model = payload;
+  cascade = null;
+  pane = 'list';
+  index = -1;
+  clearTimeout(timer);
+  document.documentElement.className = model.platform;
+  render();
+  list.style.maxHeight = `${model.maxHeight}px`;
+  list.scrollTop = 0;
+  panelOnLeft = await invoke('menu_shown', {
+    width: Math.ceil(list.getBoundingClientRect().width),
+    height: Math.ceil(Math.min(list.scrollHeight, model.maxHeight)),
+  });
+  document.documentElement.classList.toggle('panel-left', panelOnLeft);
+  list.focus();
+});
+</script>
+</body>
+</html>

@@ -1,10 +1,13 @@
-//! The keyboard on X11: which modifier keys are held, and pasting by sending
-//! Ctrl+V through the XTEST extension.
+//! The keyboard on X11: which modifier keys are held, which window has it,
+//! and pasting by sending Ctrl+V through the XTEST extension.
 
 use clip_engine::menu::HeldModifiers;
 use std::sync::OnceLock;
 use x11rb::connection::Connection;
-use x11rb::protocol::xproto::{ConnectionExt as _, KeyButMask, Keycode, Window};
+use x11rb::protocol::xproto::{
+    AtomEnum, ClientMessageEvent, ConnectionExt as _, EventMask, InputFocus, KeyButMask, Keycode,
+    Window,
+};
 use x11rb::protocol::xproto::{KEY_PRESS_EVENT, KEY_RELEASE_EVENT};
 use x11rb::protocol::xtest::ConnectionExt as _;
 use x11rb::rust_connection::RustConnection;
@@ -88,6 +91,55 @@ impl X11Keys {
         Ok(())
     }
 
+    /// The window the window manager says is active (`_NET_ACTIVE_WINDOW`).
+    /// `None` without a window manager, or when it names none.
+    pub fn active_window(&self) -> Option<Window> {
+        (|| -> Result<Option<Window>, Failed> {
+            let atom = self.active_window_atom()?;
+            let reply = self
+                .conn
+                .get_property(false, self.root, atom, AtomEnum::WINDOW, 0, 1)?
+                .reply()?;
+            let window = reply.value32().and_then(|mut values| values.next());
+            Ok(window.filter(|&window| window != x11rb::NONE))
+        })()
+        .ok()
+        .flatten()
+    }
+
+    /// Gives `window` the keyboard back, e.g. the app that was in front before
+    /// the glass menu opened. Asks the window manager the way a taskbar does,
+    /// so it also raises the window, and sets the input focus directly too,
+    /// for when there's no window manager or it doesn't listen. False if the
+    /// window is gone or not shown.
+    pub fn activate_window(&self, window: Window) -> bool {
+        (|| -> Result<(), Failed> {
+            let atom = self.active_window_atom()?;
+            // 2: the request comes from a pager or taskbar, which window
+            // managers honour without focus-stealing checks.
+            let request = ClientMessageEvent::new(32, window, atom, [2, 0, 0, 0, 0]);
+            self.conn.send_event(
+                false,
+                self.root,
+                EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+                request,
+            )?;
+            self.conn
+                .set_input_focus(InputFocus::PARENT, window, x11rb::CURRENT_TIME)?
+                .check()?;
+            Ok(())
+        })()
+        .is_ok()
+    }
+
+    fn active_window_atom(&self) -> Result<u32, Failed> {
+        Ok(self
+            .conn
+            .intern_atom(false, b"_NET_ACTIVE_WINDOW")?
+            .reply()?
+            .atom)
+    }
+
     /// Checked, so a server without XTEST is an error rather than silence.
     fn fake_key(&self, kind: u8, key: Keycode) -> Result<(), Failed> {
         self.conn
@@ -112,4 +164,14 @@ pub fn held_modifiers() -> HeldModifiers {
 /// See [`X11Keys::paste_into_focused_app`].
 pub fn paste_into_focused_app() -> bool {
     session().is_some_and(X11Keys::paste_into_focused_app)
+}
+
+/// See [`X11Keys::active_window`].
+pub fn active_window() -> Option<Window> {
+    session().and_then(X11Keys::active_window)
+}
+
+/// See [`X11Keys::activate_window`].
+pub fn activate_window(window: Window) -> bool {
+    session().is_some_and(|keys| keys.activate_window(window))
 }

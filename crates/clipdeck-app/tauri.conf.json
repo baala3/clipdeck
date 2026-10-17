@@ -7,26 +7,16 @@
   },
   "app": {
     "withGlobalTauri": true,
+    "macOSPrivateApi": true,
     "windows": [
-      {
-        "label": "menu-host",
-        "url": "menu-host.html",
-        "title": "Clipdeck",
-        "width": 1,
-        "height": 1,
-        "visible": false,
-        "decorations": false,
-        "skipTaskbar": true,
-        "focus": false
-      },
       {
         "label": "settings",
         "url": "settings.html",
         "title": "Clipdeck Settings",
-        "width": 560,
-        "height": 640,
-        "minWidth": 440,
-        "minHeight": 480,
+        "width": 860,
+        "height": 620,
+        "minWidth": 520,
+        "minHeight": 460,
         "center": true,
         "visible": false
       }

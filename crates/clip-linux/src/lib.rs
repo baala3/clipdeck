@@ -7,6 +7,8 @@ mod x11_keys;
 mod x11_source;
 
 #[cfg(target_os = "linux")]
-pub use x11_keys::{held_modifiers, paste_into_focused_app, X11Keys};
+pub use x11_keys::{
+    activate_window, active_window, held_modifiers, paste_into_focused_app, X11Keys,
+};
 #[cfg(target_os = "linux")]
 pub use x11_source::X11ClipboardSource;
