@@ -20,7 +20,7 @@ Images in History share a disk budget; once it is exceeded the oldest images are
 _Avoid_: Clipboard log, cache
 
 **Pin / Pinned list**:
-A separate, user-curated, flat list of Clips the user has explicitly chosen to keep. Pinning *copies* a Clip into this list - the original stays in History and is still evicted on its normal schedule. The Pinned list itself has no capacity cap.
+A separate, user-curated, flat list of Clips the user has explicitly chosen to keep. Pinning *copies* a Clip into this list - the original stays in History and is still evicted on its normal schedule. Like History, the Pinned list has a capacity the user configures (50 by default); once it's full, its oldest item is removed (ADR-0016).
 The user can also write text straight into the Pinned list without copying it first; such an item is a pinned Clip with no source app, and never passes through History.
 The same content is never pinned twice.
 _Avoid_: Favorite, bookmark
@@ -35,7 +35,7 @@ The Clipy-style menu a global hotkey opens at the mouse cursor: the main menu (H
 _Avoid_: Popup, panel (when "window" alone is said, it means the Settings Window)
 
 **Settings Window**:
-The only persistent, full application window. Opened from the Menu's "Settings" item, or by "Edit" in a Clip's actions menu - never opened just to browse or paste Clips. Each part of it is a page of its own, picked from a sidebar. Houses all end-user-facing configuration (light or dark appearance, hotkeys, Menu layout and modifiers, History capacity, exclusion list, encryption toggle) and is where pinned items are written and edited; a pinned image can only be removed there.
+The only persistent, full application window. Opened from the Menu's "Settings" item, or by "Edit" in a Clip's actions menu - never opened just to browse or paste Clips. Each part of it is a page of its own, picked from a sidebar. Its History and Pinned pages work alike: each lists every Clip in its list, sets that list's capacity, and offers Edit and Remove on each Clip (History also Pin or Unpin, and Clear History; Pinned also New). Houses all end-user-facing configuration (light or dark appearance, hotkeys, Menu layout and modifiers, History capacity, exclusion list, encryption toggle) and is where pinned items are written and edited.
 _Avoid_: Preferences pane, main window
 
 **Exclusion list**:

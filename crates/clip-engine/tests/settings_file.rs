@@ -21,6 +21,7 @@ fn loading_a_missing_settings_file_creates_it_with_the_defaults() {
             pinned_hotkey: "CommandOrControl+Shift+P".into(),
             clear_history_hotkey: "".into(),
             history_capacity: 50,
+            pinned_capacity: 50,
             excluded_apps: vec![],
             number_shortcut_modifier: ShortcutModifier::CommandOrControl,
             delete_modifier: ShortcutModifier::Alt,
@@ -34,6 +35,7 @@ fn loading_a_missing_settings_file_creates_it_with_the_defaults() {
     let written = std::fs::read_to_string(&path).unwrap();
     assert!(written.starts_with("# Clipdeck settings."), "{written}");
     assert!(written.contains("history_capacity = 50"), "{written}");
+    assert!(written.contains("pinned_capacity = 50"), "{written}");
     assert!(written.contains("launch_at_login = true"), "{written}");
 }
 
@@ -242,4 +244,52 @@ fn the_number_shortcut_modifier_cannot_double_as_a_click_modifier() {
         clash.validate().unwrap_err().to_string(),
         "number_shortcut_modifier and delete_modifier must be different (both are \"Alt\")"
     );
+}
+
+#[test]
+fn pinned_keeps_50_clips_by_default_and_takes_1_to_2000() {
+    assert_eq!(Settings::default().pinned_capacity, 50);
+    for bad in [0, 2001] {
+        let settings = Settings {
+            pinned_capacity: bad,
+            ..Settings::default()
+        };
+        assert_eq!(
+            settings.validate().unwrap_err().to_string(),
+            format!("pinned_capacity must be between 1 and 2000 (got {bad})")
+        );
+    }
+}
+
+#[test]
+fn a_settings_file_from_before_the_pinned_limit_existed_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = settings_path(&dir);
+    std::fs::write(&path, "history_capacity = 50\n").unwrap();
+    let mut old = SettingsFile::new(&path);
+    old.load().unwrap();
+
+    assert!(old.predates("pinned_capacity"));
+    assert!(!old.predates("history_capacity"));
+
+    let fresh_dir = tempfile::tempdir().unwrap();
+    let mut fresh = SettingsFile::new(settings_path(&fresh_dir));
+    fresh.load().unwrap();
+    assert!(
+        !fresh.predates("pinned_capacity"),
+        "a new file is written with every setting"
+    );
+}
+
+#[test]
+fn making_room_for_pinned_items_keeps_every_one_already_there() {
+    let room_for = |count| {
+        let mut settings = Settings::default();
+        settings.make_room_for_pinned(count);
+        settings.pinned_capacity
+    };
+
+    assert_eq!(room_for(10), 50, "fewer than the default keeps the default");
+    assert_eq!(room_for(80), 80);
+    assert_eq!(room_for(5000), 2000, "never past the maximum");
 }

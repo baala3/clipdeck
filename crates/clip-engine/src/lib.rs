@@ -48,12 +48,17 @@ pub enum CaptureOutcome {
 
 pub const MAX_HISTORY_CAPACITY: usize = 2000;
 pub(crate) const DEFAULT_HISTORY_CAPACITY: usize = 50;
+/// The Pinned list is bounded the same way as History (ADR-0016).
+pub const MAX_PINNED_CAPACITY: usize = 2000;
+pub(crate) const DEFAULT_PINNED_CAPACITY: usize = 50;
 /// How much disk the images in History may take together. A full History of
 /// large screenshots would otherwise run to gigabytes.
 pub const DEFAULT_HISTORY_IMAGE_BUDGET: u64 = 256 * 1024 * 1024;
 
 pub struct EngineConfig {
     pub history_capacity: usize,
+    /// How many pinned items to keep; past it the oldest go, as in History.
+    pub pinned_capacity: usize,
     pub excluded_apps: HashSet<String>,
     /// Total PNG bytes History's images may take. Once over it, the oldest
     /// image Clips are evicted, whatever the capacity. Pinned images don't count.
@@ -64,6 +69,7 @@ impl Default for EngineConfig {
     fn default() -> Self {
         Self {
             history_capacity: DEFAULT_HISTORY_CAPACITY,
+            pinned_capacity: DEFAULT_PINNED_CAPACITY,
             excluded_apps: HashSet::new(),
             history_image_budget: DEFAULT_HISTORY_IMAGE_BUDGET,
         }
@@ -139,6 +145,7 @@ impl<S: ClipStore, P: PinnedStore, I: ImageStore> ClipEngine<S, P, I> {
             Some(clip) => {
                 if !self.is_pinned(&clip.content) {
                     self.pinned_store.push(clip);
+                    self.evict_pinned_down_to_limit();
                 }
                 true
             }
@@ -159,6 +166,7 @@ impl<S: ClipStore, P: PinnedStore, I: ImageStore> ClipEngine<S, P, I> {
                 content,
                 source_app: None,
             });
+            self.evict_pinned_down_to_limit();
         }
         true
     }
@@ -202,6 +210,25 @@ impl<S: ClipStore, P: PinnedStore, I: ImageStore> ClipEngine<S, P, I> {
 
     pub fn pinned(&self) -> Vec<Clip> {
         self.pinned_store.all()
+    }
+
+    pub fn pinned_capacity(&self) -> usize {
+        self.config.pinned_capacity.clamp(1, MAX_PINNED_CAPACITY)
+    }
+
+    /// Drops the oldest pinned items until the list fits its capacity.
+    fn evict_pinned_down_to_limit(&mut self) {
+        let over = self
+            .pinned_store
+            .all()
+            .len()
+            .saturating_sub(self.pinned_capacity());
+        for _ in 0..over {
+            self.pinned_store.remove(0);
+        }
+        if over > 0 {
+            self.drop_unreferenced_images();
+        }
     }
 
     pub fn capture(&mut self, incoming: IncomingClip) -> CaptureOutcome {
@@ -251,11 +278,12 @@ impl<S: ClipStore, P: PinnedStore, I: ImageStore> ClipEngine<S, P, I> {
     }
 
     /// Swaps in a new config at runtime (e.g. after the user edits Settings).
-    /// Lowering the capacity evicts the oldest Clips right away rather than
-    /// waiting for the next capture.
+    /// Lowering a capacity evicts the oldest Clips, or pinned items, right
+    /// away rather than waiting for the next one to arrive.
     pub fn reconfigure(&mut self, config: EngineConfig) {
         self.config = config;
         self.evict_down_to_limits();
+        self.evict_pinned_down_to_limit();
     }
 
     fn evict_down_to_limits(&mut self) {

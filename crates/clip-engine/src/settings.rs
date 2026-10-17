@@ -24,6 +24,8 @@ pub struct Settings {
     /// Empty means unbound.
     pub clear_history_hotkey: String,
     pub history_capacity: usize,
+    /// How many pinned items to keep; past it the oldest go, as in History.
+    pub pinned_capacity: usize,
     pub excluded_apps: Vec<String>,
     /// Held with 1-9 and 0 while a menu is open to pick one of the first ten items.
     pub number_shortcut_modifier: ShortcutModifier,
@@ -54,6 +56,7 @@ impl Default for Settings {
             pinned_hotkey: "CommandOrControl+Shift+P".into(),
             clear_history_hotkey: String::new(),
             history_capacity: crate::DEFAULT_HISTORY_CAPACITY,
+            pinned_capacity: crate::DEFAULT_PINNED_CAPACITY,
             excluded_apps: Vec::new(),
             number_shortcut_modifier: ShortcutModifier::CommandOrControl,
             delete_modifier: ShortcutModifier::Alt,
@@ -122,9 +125,19 @@ impl Settings {
     pub fn engine_config(&self) -> crate::EngineConfig {
         crate::EngineConfig {
             history_capacity: self.history_capacity,
+            pinned_capacity: self.pinned_capacity,
             excluded_apps: self.excluded_apps.iter().cloned().collect(),
             ..Default::default()
         }
+    }
+
+    /// Raises the Pinned limit to hold `pinned` items, if it's lower. For a
+    /// settings file from before the limit existed, so its default doesn't
+    /// throw away items pinned when there was no limit.
+    pub fn make_room_for_pinned(&mut self, pinned: usize) {
+        self.pinned_capacity = self
+            .pinned_capacity
+            .max(pinned.min(crate::MAX_PINNED_CAPACITY));
     }
 
     pub fn menu_layout(&self) -> crate::menu::MenuLayout {
@@ -152,6 +165,12 @@ impl Settings {
             self.history_capacity,
             1,
             crate::MAX_HISTORY_CAPACITY,
+        )?;
+        check_range(
+            "pinned_capacity",
+            self.pinned_capacity,
+            1,
+            crate::MAX_PINNED_CAPACITY,
         )?;
         check_range("menu_title_length", self.menu_title_length, 5, 200)?;
         check_range(
@@ -312,6 +331,15 @@ impl SettingsFile {
         std::fs::rename(&tmp_path, &self.path)?;
         self.last_seen = Some(text);
         Ok(())
+    }
+
+    /// Whether the file last read was written before the setting `key`
+    /// existed: it doesn't mention it, so the default stands in for it.
+    pub fn predates(&self, key: &str) -> bool {
+        self.last_seen
+            .as_deref()
+            .and_then(|text| text.parse::<toml_edit::DocumentMut>().ok())
+            .is_some_and(|doc| !doc.contains_key(key))
     }
 
     /// Meant to be polled. Returns `None` while the file still holds what we last

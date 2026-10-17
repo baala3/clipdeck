@@ -188,16 +188,19 @@
   ul > li { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 6px 10px 6px 16px; }
   ul > li + li { border-top: 1px solid var(--hairline); }
   ul > li.empty { color: var(--muted); }
-  #pinned-list > li { align-items: flex-start; }
-  #pinned-list > li.pinned-image { align-items: center; }
-  #pinned-list > li.editing { padding: 0; }
-  #pinned-list .text {
+  .clips > li { align-items: flex-start; }
+  .clips > li.image-item { align-items: center; }
+  .clips > li.editing { padding: 0; }
+  .clips .text {
     flex: 1; min-width: 0; padding-top: 6px; white-space: pre-wrap; word-break: break-word; font: 12px/1.45 var(--mono);
     display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
   }
-  #pinned-list .image { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; }
-  #pinned-list .image img { max-width: 120px; max-height: 40px; border-radius: 7px; box-shadow: var(--glass-shadow); }
-  #pinned-list .actions { display: flex; gap: 2px; flex: none; }
+  .clips .image { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; }
+  .clips .image img { max-width: 120px; max-height: 40px; border-radius: 7px; box-shadow: var(--glass-shadow); }
+  .clips .actions { display: flex; gap: 2px; flex: none; }
+  .trim { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: -4px 0 0; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--error-border); background: var(--error-bg); color: var(--error-text); }
+  .trim[hidden] { display: none; }
+  .trim span { flex: 1; min-width: 180px; }
 
   .editor { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 10px 12px; }
   .editor textarea {
@@ -245,11 +248,6 @@
 </div>
 <div id="action-error" class="banner glass" role="alert" hidden></div>
 
-<section class="page" data-page="clip" aria-labelledby="clip-title" hidden>
-  <h1 id="clip-title">Edit Clip</h1>
-  <div class="group glass" id="clip-editor"></div>
-  <p class="hint">This changes the Clip in History. It keeps its place in the menu.</p>
-</section>
 
 <section class="page" data-page="general" aria-labelledby="general-title">
   <h1 id="general-title">General</h1>
@@ -354,20 +352,34 @@
     <button class="pill primary" id="pinned-new" type="button"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5v9M1.5 6h9"/></svg>New</button>
   </div>
   <div class="group glass">
-    <ul id="pinned-list"></ul>
+    <div class="row">
+      <label for="pinned-capacity">Clips to keep<span class="sub" id="pinned-count"></span></label>
+      <span class="stepper"><button type="button" data-step="-10" tabindex="-1" aria-label="Fewer">−</button><input id="pinned-capacity" type="number" data-field="pinned_capacity" data-list="pinned" data-name="Clips to keep" data-min="1" /><button type="button" data-step="10" tabindex="-1" aria-label="More">+</button></span>
+    </div>
   </div>
-  <p class="hint">Pinned items stay until you remove them. Pin a Clip from the menu, or write one here.</p>
+  <p class="trim" data-list="pinned" role="alert" hidden></p>
+  <div class="group glass">
+    <ul class="clips" id="pinned-list"></ul>
+  </div>
+  <p class="hint">The oldest pinned Clips are removed once Pinned is full. Pin a Clip from the menu or from History, or write one here.</p>
 </section>
 
 <section class="page" data-page="history" aria-labelledby="history-title" hidden>
-  <h1 id="history-title">History</h1>
+  <div class="page-head">
+    <h1 id="history-title">History</h1>
+    <button class="pill" id="history-clear" type="button">Clear History</button>
+  </div>
   <div class="group glass">
     <div class="row">
-      <label for="capacity">Clips to keep<span class="sub" id="capacity-range"></span></label>
-      <span class="stepper"><button type="button" data-step="-10" tabindex="-1" aria-label="Fewer">−</button><input id="capacity" type="number" data-field="history_capacity" data-name="Clips to keep" data-min="1" /><button type="button" data-step="10" tabindex="-1" aria-label="More">+</button></span>
+      <label for="history-capacity">Clips to keep<span class="sub" id="history-count"></span></label>
+      <span class="stepper"><button type="button" data-step="-10" tabindex="-1" aria-label="Fewer">−</button><input id="history-capacity" type="number" data-field="history_capacity" data-list="history" data-name="Clips to keep" data-min="1" /><button type="button" data-step="10" tabindex="-1" aria-label="More">+</button></span>
     </div>
   </div>
-  <p class="hint">The oldest Clips are removed once History is full. Pinned Clips are never removed.</p>
+  <p class="trim" data-list="history" role="alert" hidden></p>
+  <div class="group glass">
+    <ul class="clips" id="history-list"></ul>
+  </div>
+  <p class="hint">The oldest Clips are removed once History is full. Every copy lands here; a pinned one stays in Pinned after it leaves History.</p>
 </section>
 
 <section class="page" data-page="excluded" aria-labelledby="excluded-title" hidden>
@@ -422,9 +434,7 @@ const excludeInput = document.getElementById('exclude-input');
 const hotkeyButtons = document.querySelectorAll('.hotkey');
 const selects = document.querySelectorAll('select[data-field]');
 const numberInputs = document.querySelectorAll('.stepper input[data-field]');
-const capacityInput = document.getElementById('capacity');
 const appearanceButtons = document.querySelectorAll('#appearance button');
-const pinnedList = document.getElementById('pinned-list');
 const launchAtLogin = document.getElementById('launch-at-login');
 const showNumbers = document.getElementById('show-numbers');
 const checkUpdatesButton = document.getElementById('check-updates');
@@ -436,14 +446,7 @@ const main = document.querySelector('main');
 let view = null;
 let recordingButton = null;
 
-// Pages. "clip" isn't in the sidebar: it opens only for a History Clip's
-// Edit, and leaves to the page that was showing before.
-let currentPage = 'general';
-let pageBeforeClip = 'general';
-
 function showPage(name) {
-  if (name === 'clip' && currentPage !== 'clip') pageBeforeClip = currentPage;
-  currentPage = name;
   pages.forEach((page) => { page.hidden = page.dataset.page !== name; });
   navButtons.forEach((button) => {
     if (button.dataset.page === name) button.setAttribute('aria-current', 'page');
@@ -510,8 +513,9 @@ function render() {
   });
   selects.forEach((select) => { select.value = settings[select.dataset.field]; });
 
-  capacityInput.dataset.max = max_history_capacity;
-  document.getElementById('capacity-range').textContent = `Up to ${max_history_capacity}`;
+  document.getElementById('history-capacity').dataset.max = max_history_capacity;
+  document.getElementById('pinned-capacity').dataset.max = view.max_pinned_capacity;
+  renderCounts();
   numberInputs.forEach((input) => {
     input.min = input.dataset.min;
     input.max = input.dataset.max;
@@ -717,7 +721,31 @@ function commitNumber(input, value) {
     input.value = view.settings[input.dataset.field];
     return;
   }
+  const list = input.dataset.list;
+  const removed = list ? lists[list].items.length - value : 0;
+  if (removed > 0 && value < view.settings[input.dataset.field]) {
+    askToTrim(input, value, removed);
+    return;
+  }
   update({ [input.dataset.field]: value });
+}
+
+// Lowering a limit below what the list holds removes its oldest Clips, so it
+// says how many and waits for a yes.
+function askToTrim(input, value, removed) {
+  const strip = document.querySelector(`.trim[data-list="${input.dataset.list}"]`);
+  const noun = input.dataset.list === 'pinned' ? 'pinned Clip' : 'Clip';
+  const text = document.createElement('span');
+  text.textContent = `Keeping ${value} removes the ${removed} oldest ${noun}${removed === 1 ? '' : 's'}.`;
+  const keep = quietButton('Keep them');
+  const remove = quietButton(`Remove ${removed}`);
+  remove.classList.remove('quiet');
+  const done = () => { strip.hidden = true; strip.replaceChildren(); };
+  keep.onclick = () => { done(); input.value = view.settings[input.dataset.field]; };
+  remove.onclick = async () => { done(); await update({ [input.dataset.field]: value }); loadLists(); };
+  strip.replaceChildren(text, keep, remove);
+  strip.hidden = false;
+  input.value = value;
 }
 
 numberInputs.forEach((input) => {
@@ -739,9 +767,31 @@ document.querySelectorAll('.unbind').forEach((button) => {
   button.addEventListener('click', () => update({ [button.dataset.field]: '' }));
 });
 
-// Pinned items: written, edited, and removed here.
-let pinnedItems = [];
-let editing = null; // null, 'new', or the index of the item being edited
+// The History and Pinned lists: every Clip in each, with the same things to
+// do on both. `editing` is null, 'new' (Pinned only), or the index of the
+// item whose editor is open.
+const lists = {
+  pinned: {
+    node: document.getElementById('pinned-list'),
+    items: [],
+    editing: null,
+    load: () => invoke('list_pinned'),
+    empty: 'Nothing pinned yet.',
+    edit: (item, text) => invoke('edit_pinned', { index: item.index, text }),
+    remove: (item) => invoke('remove_pinned', { index: item.index }),
+  },
+  history: {
+    node: document.getElementById('history-list'),
+    items: [],
+    editing: null,
+    load: () => invoke('list_history'),
+    empty: 'Nothing copied yet.',
+    // Found again by its text, since History moves on while the editor is open.
+    edit: (item, text) => invoke('edit_history_clip', { original: item.text, text }),
+    remove: (item) => invoke('remove_history_clip', { index: item.index }),
+    togglePin: (item) => invoke('toggle_history_pin', { index: item.index }),
+  },
+};
 
 // A text box with Save and Cancel. `onSave` gets the text and may reject;
 // `onDone` runs once the editor is finished with, saved or not.
@@ -796,35 +846,6 @@ function textEditor(initial, { label, placeholder, onSave, onDone }) {
   return editor;
 }
 
-function pinnedEditor(initial, onSave) {
-  return textEditor(initial, {
-    label: 'Pinned text',
-    placeholder: 'Text to keep in Pinned...',
-    onSave,
-    onDone: async (saved) => {
-      editing = null;
-      if (saved) await loadPinned();
-      else renderPinned();
-    },
-  });
-}
-
-// A History Clip's "Edit" in the menu: rewrites that Clip, found again by the
-// text it had, since History can change while the editor is open.
-const clipEditor = document.getElementById('clip-editor');
-function editClip(original) {
-  clipEditor.replaceChildren(textEditor(original, {
-    label: 'Clip text',
-    placeholder: 'The Clip\'s text...',
-    onSave: (text) => invoke('edit_history_clip', { original, text }),
-    onDone: () => {
-      clipEditor.replaceChildren();
-      showPage(pageBeforeClip);
-    },
-  }));
-  showPage('clip');
-}
-
 function quietButton(text) {
   const button = document.createElement('button');
   button.type = 'button';
@@ -833,34 +854,61 @@ function quietButton(text) {
   return button;
 }
 
-function renderPinned() {
-  pinnedList.replaceChildren();
-  if (editing === 'new') {
+// Runs a list action, then shows the list as it is afterwards.
+async function act(action) {
+  try {
+    await action();
+    showActionError(null);
+  } catch (err) {
+    showActionError(String(err));
+  }
+  await loadLists();
+}
+
+function editorFor(name, initial, onSave) {
+  const list = lists[name];
+  return textEditor(initial, {
+    label: name === 'pinned' ? 'Pinned text' : 'Clip text',
+    placeholder: name === 'pinned' ? 'Text to keep in Pinned...' : 'The Clip\'s text...',
+    onSave,
+    onDone: async (saved) => {
+      list.editing = null;
+      if (saved) await loadLists();
+      else renderList(name);
+    },
+  });
+}
+
+function renderList(name) {
+  const list = lists[name];
+  const node = list.node;
+  node.replaceChildren();
+  if (list.editing === 'new') {
     const li = document.createElement('li');
     li.className = 'editing';
-    li.appendChild(pinnedEditor('', (text) => invoke('add_pinned', { text })));
-    pinnedList.appendChild(li);
+    li.appendChild(editorFor(name, '', (text) => invoke('add_pinned', { text })));
+    node.appendChild(li);
   }
-  if (pinnedItems.length === 0 && editing !== 'new') {
+  if (list.items.length === 0 && list.editing !== 'new') {
     const empty = document.createElement('li');
     empty.className = 'empty';
-    empty.textContent = 'Nothing pinned yet.';
-    pinnedList.appendChild(empty);
+    empty.textContent = list.empty;
+    node.appendChild(empty);
   }
-  for (const item of pinnedItems) {
+  for (const item of list.items) {
     const li = document.createElement('li');
-    if (editing === item.index) {
+    if (list.editing === item.index) {
       li.className = 'editing';
-      li.appendChild(pinnedEditor(item.text, (text) => invoke('edit_pinned', { index: item.index, text })));
-      pinnedList.appendChild(li);
+      li.appendChild(editorFor(name, item.text, (text) => list.edit(item, text)));
+      node.appendChild(li);
       continue;
     }
     const actions = document.createElement('span');
     actions.className = 'actions';
     let content;
     if (item.image) {
-      // A pinned image can be removed, but there's nothing to edit.
-      li.className = 'pinned-image';
+      // An image can be pinned or removed, but there's nothing to edit.
+      li.className = 'image-item';
       content = document.createElement('span');
       content.className = 'image';
       if (item.image.thumbnail) {
@@ -876,57 +924,75 @@ function renderPinned() {
       content.textContent = item.text;
       content.title = item.text;
       const edit = quietButton('Edit');
-      edit.onclick = () => { editing = item.index; renderPinned(); };
+      edit.onclick = () => { list.editing = item.index; renderList(name); };
       actions.appendChild(edit);
     }
+    if (list.togglePin) {
+      const pin = quietButton(item.pinned ? 'Unpin' : 'Pin');
+      pin.onclick = () => act(() => list.togglePin(item));
+      actions.appendChild(pin);
+    }
     const remove = quietButton('Remove');
-    remove.onclick = async () => {
-      try {
-        await invoke('remove_pinned', { index: item.index });
-        await loadPinned();
-      } catch (err) {
-        showActionError(String(err));
-      }
-    };
+    remove.onclick = () => act(() => list.remove(item));
     actions.appendChild(remove);
     li.append(content, actions);
-    pinnedList.appendChild(li);
+    node.appendChild(li);
   }
 }
 
-async function loadPinned() {
-  try {
-    pinnedItems = await invoke('list_pinned');
-  } catch (err) {
-    showActionError(`Couldn't load pinned items: ${err}`);
+// "12 of 50" under each limit.
+function renderCounts() {
+  if (!view) return;
+  document.getElementById('history-count').textContent =
+    `${lists.history.items.length} of ${view.settings.history_capacity} · up to ${view.max_history_capacity}`;
+  document.getElementById('pinned-count').textContent =
+    `${lists.pinned.items.length} of ${view.settings.pinned_capacity} · up to ${view.max_pinned_capacity}`;
+}
+
+async function loadLists() {
+  for (const [name, list] of Object.entries(lists)) {
+    try {
+      list.items = await list.load();
+    } catch (err) {
+      showActionError(`Couldn't load ${name}: ${err}`);
+    }
+    // Indices shift when the list changes elsewhere; drop an edit in progress then.
+    if (typeof list.editing === 'number' && !list.items.some((item) => item.index === list.editing)) list.editing = null;
+    renderList(name);
   }
-  // Indices shift when the list changes elsewhere; drop an edit in progress then.
-  if (typeof editing === 'number' && !pinnedItems.some((item) => item.index === editing)) editing = null;
-  renderPinned();
+  renderCounts();
 }
 
 document.getElementById('pinned-new').addEventListener('click', () => {
-  editing = 'new';
-  renderPinned();
+  lists.pinned.editing = 'new';
+  renderList('pinned');
 });
+document.getElementById('history-clear').addEventListener('click', () => invoke('clear_history'));
 
-listen('pinned-changed', () => {
+listen('clips-changed', () => {
   // Don't yank an editor away from someone typing in it.
-  if (editing === null) loadPinned();
+  if (lists.pinned.editing === null && lists.history.editing === null) loadLists();
 });
 
 listen('show-section', async (event) => {
   // "pinned-edit:3" opens the editor of pinned item 3, and
-  // "clip-edit:some text" the editor of that History Clip.
+  // "clip-edit:some text" the editor of the History Clip holding that text.
   const colon = event.payload.indexOf(':');
   const target = colon < 0 ? event.payload : event.payload.slice(0, colon);
   const detail = colon < 0 ? '' : event.payload.slice(colon + 1);
   if (target === 'pinned-edit') {
-    editing = Number(detail);
+    lists.pinned.editing = Number(detail);
     showPage('pinned');
-    await loadPinned();
+    await loadLists();
   } else if (target === 'clip-edit') {
-    editClip(detail);
+    showPage('history');
+    await loadLists();
+    const item = lists.history.items.find((candidate) => candidate.text === detail);
+    if (item) {
+      lists.history.editing = item.index;
+      renderList('history');
+      lists.history.node.querySelector('.editing')?.scrollIntoView({ block: 'center' });
+    }
   }
 });
 
@@ -936,7 +1002,7 @@ listen('settings-changed', (event) => {
 });
 
 showPage('general');
-loadPinned();
+loadLists();
 invoke('get_settings')
   .then((initial) => { view = initial; render(); })
   .catch((err) => showActionError(`Couldn't load settings: ${err}`));

@@ -308,7 +308,7 @@ pub fn confirm_and_clear_history(app: &AppHandle) {
 }
 
 /// Keeps what shows Clips current after they change: the Linux tray's native
-/// menu, and the Settings Window's pinned items. Safe to call from any
+/// menu, and the Settings Window's History and Pinned lists. Safe to call from any
 /// thread; the work happens on the event loop. The glass menu needs nothing,
 /// since it's filled afresh each time it opens.
 pub fn refresh_tray_menu(app: &AppHandle) {
@@ -323,7 +323,7 @@ pub fn refresh_tray_menu(app: &AppHandle) {
             }
             Err(err) => eprintln!("couldn't build the tray menu: {err}"),
         }
-        let _ = handle.emit_to(settings::SETTINGS_WINDOW, "pinned-changed", ());
+        let _ = handle.emit_to(settings::SETTINGS_WINDOW, "clips-changed", ());
     });
 }
 
