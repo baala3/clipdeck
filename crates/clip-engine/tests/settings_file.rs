@@ -20,7 +20,7 @@ fn loading_a_missing_settings_file_creates_it_with_the_defaults() {
             history_hotkey: "CommandOrControl+Shift+H".into(),
             pinned_hotkey: "CommandOrControl+Shift+P".into(),
             clear_history_hotkey: "".into(),
-            history_capacity: 200,
+            history_capacity: 50,
             excluded_apps: vec![],
             number_shortcut_modifier: ShortcutModifier::CommandOrControl,
             delete_modifier: ShortcutModifier::Alt,
@@ -33,7 +33,7 @@ fn loading_a_missing_settings_file_creates_it_with_the_defaults() {
     );
     let written = std::fs::read_to_string(&path).unwrap();
     assert!(written.starts_with("# Clipdeck settings."), "{written}");
-    assert!(written.contains("history_capacity = 200"), "{written}");
+    assert!(written.contains("history_capacity = 50"), "{written}");
     assert!(written.contains("launch_at_login = true"), "{written}");
 }
 

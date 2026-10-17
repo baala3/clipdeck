@@ -71,8 +71,6 @@ pub struct MenuTargets {
 }
 
 const CLEAR_HISTORY: &str = "clear_history";
-const EDIT_PINNED: &str = "edit_pinned";
-const NEW_PINNED: &str = "new_pinned";
 const SETTINGS: &str = "settings";
 const PAUSE: &str = "pause";
 const QUIT: &str = "quit";
@@ -341,22 +339,6 @@ fn build(
         },
         true,
     )?;
-    if kind != MenuKind::History {
-        more.append(&MenuItem::with_id(
-            app,
-            NEW_PINNED,
-            "New Pinned Item",
-            true,
-            None::<&str>,
-        )?)?;
-    }
-    more.append(&MenuItem::with_id(
-        app,
-        EDIT_PINNED,
-        "Edit Pinned",
-        true,
-        None::<&str>,
-    )?)?;
     more.append(&MenuItem::with_id(
         app,
         CLEAR_HISTORY,
@@ -717,9 +699,6 @@ pub fn watch_menu_actions(app: &AppHandle) {
 pub fn handle_menu_event(app: &AppHandle, id: &str) {
     match id {
         CLEAR_HISTORY => confirm_and_clear_history(app),
-        EDIT_PINNED => settings::show_settings_window_at(app, Some("pinned")),
-        // A menu can't hold a text box, so writing happens in Settings.
-        NEW_PINNED => settings::show_settings_window_at(app, Some("pinned-new")),
         SETTINGS => settings::show_settings_window_at(app, None),
         PAUSE => {
             let state = app.state::<AppState>();
