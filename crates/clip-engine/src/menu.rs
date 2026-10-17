@@ -205,8 +205,8 @@ pub struct ScreenRect {
     pub height: f64,
 }
 
-/// Where the glass menu opens, and which side of it the side panel (a
-/// folder, More, a Clip's actions or its preview) opens on.
+/// Where the glass menu opens, and which side of it its cascades (a folder,
+/// More, a Clip's actions or its preview) open on.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PopupPlacement {
     pub x: f64,
@@ -216,8 +216,8 @@ pub struct PopupPlacement {
 
 /// Places a menu of `size` with its top-left corner at the cursor, like a
 /// native menu: flipped to the cursor's left near the right edge of `area`
-/// (the screen's work area), and moved up near its bottom. The side panel goes
-/// on the right unless only the left has room for `panel_width`.
+/// (the screen's work area), and moved up near its bottom. Cascades go on the
+/// right unless only the left has room for `panel_width`.
 pub fn place_popup(
     cursor: (f64, f64),
     size: (f64, f64),
@@ -226,17 +226,12 @@ pub fn place_popup(
 ) -> PopupPlacement {
     let (width, height) = size;
     let right = area.x + area.width;
-    let bottom = area.y + area.height;
     let x = if cursor.0 + width > right {
         (cursor.0 - width).max(area.x)
     } else {
         cursor.0.max(area.x)
     };
-    let y = if cursor.1 + height > bottom {
-        (bottom - height).max(area.y)
-    } else {
-        cursor.1.max(area.y)
-    };
+    let y = fit_down(cursor.1, height, area);
     let room_right = x + width + panel_width <= right;
     let room_left = x - panel_width >= area.x;
     PopupPlacement {
@@ -246,26 +241,31 @@ pub fn place_popup(
     }
 }
 
-/// Where a placed menu (`window`) moves when its side panel opens or closes
-/// and it becomes `size`: a panel on the left grows it leftwards, so the list
-/// itself stays still, and it moves up rather than run off the bottom.
-pub fn resize_popup(
-    window: ScreenRect,
+/// Where a cascade of `size` opens: against the side of `menu` that
+/// `on_left` picks, with its top level with the row it belongs to (`row_y`),
+/// moved up rather than run off the bottom of `area`.
+pub fn place_cascade(
+    menu: ScreenRect,
+    row_y: f64,
     size: (f64, f64),
-    panel_on_left: bool,
+    on_left: bool,
     area: ScreenRect,
 ) -> (f64, f64) {
-    let (width, height) = size;
-    let x = if panel_on_left {
-        window.x + window.width - width
+    let x = if on_left {
+        menu.x - size.0
     } else {
-        window.x
+        menu.x + menu.width
     };
+    (x, fit_down(row_y, size.1, area))
+}
+
+/// `y`, or higher if something `height` tall starting there would run off
+/// the bottom of `area`; never above its top.
+fn fit_down(y: f64, height: f64, area: ScreenRect) -> f64 {
     let bottom = area.y + area.height;
-    let y = if window.y + height > bottom {
+    if y + height > bottom {
         (bottom - height).max(area.y)
     } else {
-        window.y
-    };
-    (x, y)
+        y.max(area.y)
+    }
 }

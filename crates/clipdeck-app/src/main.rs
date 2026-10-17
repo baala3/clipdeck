@@ -145,7 +145,11 @@ fn main() {
             pinned::edit_history_clip,
             updates::check_for_updates,
             popup::menu_shown,
-            popup::menu_resize,
+            popup::cascade_open,
+            popup::cascade_shown,
+            popup::cascade_close,
+            popup::cascade_highlight,
+            popup::cascade_input,
             popup::menu_choose,
             popup::menu_digit,
             popup::menu_action,
@@ -192,7 +196,7 @@ fn main() {
             });
 
             settings::apply_appearance(app.handle(), current_appearance);
-            popup::create_window(app)?;
+            popup::create_windows(app)?;
 
             #[cfg(windows)]
             spawn_capture_thread(

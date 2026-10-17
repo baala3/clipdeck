@@ -1,4 +1,4 @@
-use clip_engine::menu::{place_popup, resize_popup, PopupPlacement, ScreenRect};
+use clip_engine::menu::{place_cascade, place_popup, PopupPlacement, ScreenRect};
 
 /// A 1920 x 1040 work area: a 1080p screen above a 40px taskbar.
 const AREA: ScreenRect = ScreenRect {
@@ -7,6 +7,7 @@ const AREA: ScreenRect = ScreenRect {
     width: 1920.0,
     height: 1040.0,
 };
+/// How wide a cascade (a folder, More, a preview) may be.
 const PANEL: f64 = 320.0;
 
 #[test]
@@ -43,7 +44,7 @@ fn a_menu_taller_than_the_screen_starts_at_its_top() {
 }
 
 #[test]
-fn the_side_panel_opens_on_the_left_when_the_right_has_no_room_for_it() {
+fn cascades_open_on_the_left_when_the_right_has_no_room_for_them() {
     assert!(!place_popup((400.0, 300.0), (300.0, 500.0), PANEL, AREA).panel_on_left);
     assert!(place_popup((1400.0, 300.0), (300.0, 500.0), PANEL, AREA).panel_on_left);
 }
@@ -80,48 +81,41 @@ fn work_areas_need_not_start_at_zero() {
     );
 }
 
-#[test]
-fn opening_the_panel_on_the_right_keeps_the_menu_where_it_was() {
-    let menu = ScreenRect {
-        x: 400.0,
-        y: 300.0,
-        width: 300.0,
-        height: 500.0,
-    };
+const MENU: ScreenRect = ScreenRect {
+    x: 400.0,
+    y: 300.0,
+    width: 300.0,
+    height: 500.0,
+};
 
+#[test]
+fn a_cascade_opens_beside_the_menu_level_with_its_row() {
     assert_eq!(
-        resize_popup(menu, (621.0, 500.0), false, AREA),
-        (400.0, 300.0)
+        place_cascade(MENU, 360.0, (320.0, 200.0), false, AREA),
+        (700.0, 360.0)
     );
 }
 
 #[test]
-fn opening_the_panel_on_the_left_grows_the_window_leftwards() {
-    let menu = ScreenRect {
-        x: 1400.0,
-        y: 300.0,
-        width: 300.0,
-        height: 500.0,
-    };
-
+fn on_the_left_it_ends_where_the_menu_starts() {
     assert_eq!(
-        resize_popup(menu, (621.0, 500.0), true, AREA),
-        (1079.0, 300.0),
-        "the list stays put, so the row under the cursor doesn't move"
+        place_cascade(MENU, 360.0, (320.0, 200.0), true, AREA),
+        (80.0, 360.0)
     );
 }
 
 #[test]
-fn a_panel_taller_than_the_room_below_moves_the_window_up() {
-    let menu = ScreenRect {
-        x: 400.0,
-        y: 800.0,
-        width: 300.0,
-        height: 200.0,
-    };
-
+fn a_cascade_near_the_bottom_moves_up_to_stay_on_screen() {
     assert_eq!(
-        resize_popup(menu, (621.0, 400.0), false, AREA),
-        (400.0, 640.0)
+        place_cascade(MENU, 950.0, (320.0, 200.0), false, AREA),
+        (700.0, 840.0)
+    );
+}
+
+#[test]
+fn a_cascade_taller_than_the_screen_starts_at_its_top() {
+    assert_eq!(
+        place_cascade(MENU, 950.0, (320.0, 1500.0), false, AREA),
+        (700.0, 0.0)
     );
 }

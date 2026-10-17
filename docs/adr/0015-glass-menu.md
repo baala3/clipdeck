@@ -10,14 +10,15 @@ The menu is now a borderless, always-on-top window (`menu`) holding a page, `dis
 What it shows is unchanged: History and Pinned with numbers, shortened titles, "11 - 20" folders, image thumbnails, the number shortcuts, and More with Clear History, Pause capture, Settings and Quit Clipdeck.
 Numbers sit in a column of their own, shortcuts are written on key chips ("Ctrl 1", "⌘1"), and a pause shows as a "Capture paused" badge on the first heading instead of renaming More.
 
-Anything that used to cascade opens in a side panel instead: the panel widens the same glass pane, beside the list (or on its left near the right edge of the screen).
+Anything that used to cascade still does: a small glass window, the cascade (`dist/cascade.html`), opens beside its row, as tall as what it shows, on the menu's right (or its left near the right edge of the screen).
 It shows:
 - a folder;
 - More;
-- a Clip's actions, from a right-click or the arrow key toward the panel;
+- a Clip's actions, from a right-click or the arrow key toward the cascade (a folder's Clip shows its actions in the folder's place);
 - a shortened Clip's full text, or an image Clip's picture, after the pointer rests on its row.
 
-The panel stays in the same window as the list: cascading menus as separate windows were rejected below.
+The cascade never takes the keyboard, so the menu keeps it, like a native submenu.
+The menu's page decides what the cascade shows and highlights; the cascade only draws that and reports the mouse back.
 
 The glass itself comes from the OS where it can:
 - Windows: Acrylic, which blurs whatever is behind the window.
@@ -40,8 +41,8 @@ A Linux tray icon (AppIndicator) reports no clicks, only a menu to show, so the 
 
 Considered and rejected:
 
-- **Cascades as separate glass windows**, as the design mockup drew them.
-  Each would be its own OS window to place, focus and close together, and Acrylic can't span the gap between them.
+- **One window whose side panel widens it**, the first version of this.
+  A folder of ten rows, or three actions, left a pane of empty glass the height of the menu beside it; the user wanted menu-sized cascades back.
 - **A full-screen see-through window** so cascades could float anywhere.
   Without a compositor (common on X11) a see-through window is black, and it would sit over every other app while open.
 - **Keeping native menus and styling only what the OS allows.**

@@ -25,4 +25,4 @@ Considered and rejected:
 macOS has no tooltips yet.
 `NSMenuItem.toolTip` would do it natively, but Tauri doesn't expose the `NSMenu` behind a menu, and nothing in the macOS adapter can be run here to verify a workaround.
 
-**Status**: accepted; the tooltips and pictures now show in the glass menu's side panel, on every platform ([ADR-0015](0015-glass-menu.md))
+**Status**: accepted; the tooltips and pictures now show in the glass menu's cascades, on every platform ([ADR-0015](0015-glass-menu.md))

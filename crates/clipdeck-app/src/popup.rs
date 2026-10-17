@@ -3,12 +3,17 @@
 //! page (`dist/menu.html`) draws it and handles the mouse and keyboard; this
 //! module fills it, places it on screen, gives the keyboard back to the app
 //! the user was in, and carries out what was chosen.
+//!
+//! A folder, More, a Clip's actions and its preview open beside their row in
+//! a second window, the cascade (`dist/cascade.html`), like a native submenu.
+//! It never takes the keyboard: the menu's page decides what it shows and
+//! highlights, and the cascade only draws that and reports the mouse.
 
 use crate::clip_menu::{self, List, MenuKind, PasteInto, Target};
 use crate::AppState;
 use base64::prelude::{Engine as _, BASE64_STANDARD};
 use clip_engine::menu::{
-    history_clip_actions, image_title, layout, pinned_clip_actions, place_popup, resize_popup,
+    history_clip_actions, image_title, layout, pinned_clip_actions, place_cascade, place_popup,
     ClipAction, HeldModifiers, MenuEntry, MenuItemModel, ScreenRect,
 };
 use clip_engine::{ClipContent, Rgba, ShortcutModifier};
@@ -19,10 +24,11 @@ use tauri::{
 };
 
 pub const MENU_WINDOW: &str = "menu";
-/// The side panel's width in CSS pixels, as `menu.html` draws it.
-const PANEL_WIDTH: f64 = 320.0;
-/// How large an image Clip is shown in the side panel, in pixels: twice the
-/// panel's size, for sharp pictures on high-DPI screens.
+const CASCADE_WINDOW: &str = "cascade";
+/// The widest a cascade gets in CSS pixels, as `cascade.html` draws it.
+const CASCADE_WIDTH: f64 = 320.0;
+/// How large an image Clip is shown in a cascade, in pixels: twice its size
+/// there, for sharp pictures on high-DPI screens.
 const PREVIEW_MAX: (u32, u32) = (600, 480);
 
 /// The app that had the keyboard before the glass menu took it, so it can be
@@ -116,19 +122,33 @@ pub struct PopupState {
     /// Where it is on screen now, in physical pixels.
     window: Option<ScreenRect>,
     panel_on_left: bool,
+    /// The top of the row the open cascade belongs to, in CSS pixels from
+    /// the top of the menu.
+    cascade_row: f64,
     targets: HashMap<String, Target>,
     /// Number shortcut digit -> id of the item it picks.
     digits: HashMap<char, String>,
 }
 
-/// Makes the glass menu's window, hidden until a menu opens. Call it once,
+/// Makes the glass menu's windows, hidden until a menu opens. Call it once,
 /// at startup.
-pub fn create_window(app: &tauri::App) -> tauri::Result<()> {
-    let builder = WebviewWindowBuilder::new(app, MENU_WINDOW, WebviewUrl::App("menu.html".into()))
+pub fn create_windows(app: &tauri::App) -> tauri::Result<()> {
+    glass_window(app, MENU_WINDOW, "menu.html", true)?;
+    glass_window(app, CASCADE_WINDOW, "cascade.html", false)
+}
+
+/// A borderless, always-on-top window of glass. One that isn't `focusable`
+/// takes clicks without taking the keyboard, like a native submenu.
+fn glass_window(app: &tauri::App, label: &str, page: &str, focusable: bool) -> tauri::Result<()> {
+    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(page.into()))
         .title("Clipdeck")
         .inner_size(300.0, 200.0)
         .visible(false)
-        .focused(false)
+        // Hidden, so this takes nothing yet; but a window made unfocused
+        // can't take the keyboard on Linux until it has been drawn once.
+        .focused(focusable)
+        .focusable(focusable)
+        .accept_first_mouse(true)
         .decorations(false)
         .resizable(false)
         .skip_taskbar(true)
@@ -213,6 +233,7 @@ fn open(app: &AppHandle, kind: MenuKind, from_tray: bool) {
             scale: monitor.scale_factor(),
             window: None,
             panel_on_left: false,
+            cascade_row: 0.0,
             targets: built.targets,
             digits: built.digits,
         };
@@ -232,8 +253,10 @@ fn close(app: &AppHandle, restore: bool) -> Option<PopupState> {
         }
         std::mem::take(&mut *popup)
     };
-    if let Some(window) = app.get_webview_window(MENU_WINDOW) {
-        let _ = window.hide();
+    for label in [CASCADE_WINDOW, MENU_WINDOW] {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.hide();
+        }
     }
     if restore {
         popup.previous.restore();
@@ -247,8 +270,8 @@ pub fn on_blur(app: &AppHandle) {
 }
 
 /// Called by the page once it has laid out a menu `width` x `height` CSS
-/// pixels big. Puts it at the cursor and shows it; returns whether the side
-/// panel should open on the menu's left.
+/// pixels big. Puts it at the cursor and shows it; returns whether its
+/// cascades open on its left.
 #[tauri::command]
 pub fn menu_shown(app: AppHandle, width: f64, height: f64) -> bool {
     let (rect, panel_on_left) = {
@@ -258,7 +281,7 @@ pub fn menu_shown(app: AppHandle, width: f64, height: f64) -> bool {
             return false;
         };
         let size = (width * popup.scale, height * popup.scale);
-        let placed = place_popup(popup.cursor, size, PANEL_WIDTH * popup.scale, area);
+        let placed = place_popup(popup.cursor, size, CASCADE_WIDTH * popup.scale, area);
         let rect = ScreenRect {
             x: placed.x,
             y: placed.y,
@@ -275,16 +298,98 @@ pub fn menu_shown(app: AppHandle, width: f64, height: f64) -> bool {
     let _ = window.set_position(PhysicalPosition::new(rect.x.round(), rect.y.round()));
     let _ = window.set_size(PhysicalSize::new(rect.width.round(), rect.height.round()));
     let _ = window.show();
-    let _ = window.set_focus();
-    #[cfg(target_os = "linux")]
-    take_keyboard(&window);
+    take_keyboard(&app, &window);
     panel_on_left
 }
 
-/// A window manager may not give the keyboard to a window that opened from a
-/// hotkey (focus-stealing prevention), so the menu takes it itself.
+/// Gives the menu the keyboard, and the page in it, so its keys work.
+fn take_keyboard(app: &AppHandle, window: &tauri::WebviewWindow) {
+    let focus = |window: &tauri::WebviewWindow| {
+        let _ = window.set_focus();
+        let _ = AsRef::<tauri::Webview>::as_ref(window).set_focus();
+    };
+    focus(window);
+    // GTK shows a window on its next turn of the event loop, and a focus
+    // request for a window not yet shown is dropped; so ask again once it's
+    // up. A window manager may also refuse the keyboard to a window opened
+    // from a hotkey (focus-stealing prevention), so it's taken through X11
+    // as well.
+    #[cfg(target_os = "linux")]
+    {
+        let app = app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(60));
+            let handle = app.clone();
+            let _ = app.run_on_main_thread(move || {
+                if let Some(window) = handle.get_webview_window(MENU_WINDOW) {
+                    focus(&window);
+                    take_x11_keyboard(&window);
+                }
+            });
+        });
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = app;
+}
+
+/// The menu's page opens a cascade beside the row `row_top` CSS pixels from
+/// its top, showing `content` (what `cascade.html` takes).
+#[tauri::command]
+pub fn cascade_open(app: AppHandle, content: serde_json::Value, row_top: f64) {
+    app.state::<AppState>().popup.lock().unwrap().cascade_row = row_top;
+    let _ = app.emit_to(CASCADE_WINDOW, "cascade-open", content);
+}
+
+/// The cascade's page has laid out what it shows, `width` x `height` CSS
+/// pixels; puts it beside its row and shows it, leaving the keyboard with the
+/// menu.
+#[tauri::command]
+pub fn cascade_shown(app: AppHandle, width: f64, height: f64) {
+    let rect = {
+        let state = app.state::<AppState>();
+        let popup = state.popup.lock().unwrap();
+        let (Some(menu), Some(area), true) = (popup.window, popup.area, popup.open) else {
+            return;
+        };
+        let size = (width * popup.scale, height * popup.scale);
+        let row_y = menu.y + popup.cascade_row * popup.scale;
+        let (x, y) = place_cascade(menu, row_y, size, popup.panel_on_left, area);
+        ScreenRect {
+            x,
+            y,
+            width: size.0,
+            height: size.1,
+        }
+    };
+    if let Some(window) = app.get_webview_window(CASCADE_WINDOW) {
+        let _ = window.set_position(PhysicalPosition::new(rect.x.round(), rect.y.round()));
+        let _ = window.set_size(PhysicalSize::new(rect.width.round(), rect.height.round()));
+        let _ = window.show();
+    }
+}
+
+#[tauri::command]
+pub fn cascade_close(app: AppHandle) {
+    if let Some(window) = app.get_webview_window(CASCADE_WINDOW) {
+        let _ = window.hide();
+    }
+}
+
+/// The menu's page moves the cascade's highlight to row `index` (-1: none).
+#[tauri::command]
+pub fn cascade_highlight(app: AppHandle, index: i64) {
+    let _ = app.emit_to(CASCADE_WINDOW, "cascade-highlight", index);
+}
+
+/// The cascade's page reports the mouse (a row entered, clicked or
+/// right-clicked) to the menu's page, which decides what it means.
+#[tauri::command]
+pub fn cascade_input(app: AppHandle, input: serde_json::Value) {
+    let _ = app.emit_to(MENU_WINDOW, "cascade-input", input);
+}
+
 #[cfg(target_os = "linux")]
-fn take_keyboard(window: &tauri::WebviewWindow) {
+fn take_x11_keyboard(window: &tauri::WebviewWindow) {
     use gtk::prelude::*;
     let xid = window
         .gtk_window()
@@ -303,33 +408,6 @@ fn take_keyboard(window: &tauri::WebviewWindow) {
                 }
             }
         });
-    }
-}
-
-/// Called by the page when the side panel opens or closes and the menu
-/// becomes `width` x `height` CSS pixels big.
-#[tauri::command]
-pub fn menu_resize(app: AppHandle, width: f64, height: f64) {
-    let rect = {
-        let state = app.state::<AppState>();
-        let mut popup = state.popup.lock().unwrap();
-        let (Some(window), Some(area)) = (popup.window, popup.area) else {
-            return;
-        };
-        let size = (width * popup.scale, height * popup.scale);
-        let (x, y) = resize_popup(window, size, popup.panel_on_left, area);
-        let rect = ScreenRect {
-            x,
-            y,
-            width: size.0,
-            height: size.1,
-        };
-        popup.window = Some(rect);
-        rect
-    };
-    if let Some(window) = app.get_webview_window(MENU_WINDOW) {
-        let _ = window.set_position(PhysicalPosition::new(rect.x.round(), rect.y.round()));
-        let _ = window.set_size(PhysicalSize::new(rect.width.round(), rect.height.round()));
     }
 }
 
@@ -438,7 +516,7 @@ pub fn menu_dismiss(app: AppHandle) {
     close(&app, true);
 }
 
-/// The image Clip `id` as a `data:` URL, sized for the side panel.
+/// The image Clip `id` as a `data:` URL, sized for its cascade.
 #[tauri::command]
 pub async fn menu_preview(app: AppHandle, id: String) -> Option<String> {
     let state = app.state::<AppState>();

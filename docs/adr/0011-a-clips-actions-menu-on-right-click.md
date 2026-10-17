@@ -53,4 +53,4 @@ Considered and rejected:
 - **A hint row** ("Shift+click to pin").
   It makes the shortcut discoverable without making it any friendlier.
 
-**Status**: accepted; the actions now open in the glass menu's side panel, on every platform ([ADR-0015](0015-glass-menu.md))
+**Status**: accepted; the actions now open in the glass menu's cascades, on every platform ([ADR-0015](0015-glass-menu.md))
