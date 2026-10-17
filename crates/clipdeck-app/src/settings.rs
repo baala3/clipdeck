@@ -3,7 +3,7 @@
 //! poller that picks up hand edits to the settings file.
 
 use crate::AppState;
-use clip_engine::{Appearance, Settings, SettingsFile, MAX_HISTORY_CAPACITY};
+use clip_engine::{Appearance, Settings, SettingsFile, MAX_HISTORY_CAPACITY, MAX_PINNED_CAPACITY};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -180,12 +180,26 @@ impl SettingsState {
         &self.current
     }
 
+    /// A settings file from before the Pinned limit existed gets one big
+    /// enough for the `pinned` items already there, so updating Clipdeck
+    /// never throws pinned items away; it's written to the file right away.
+    pub fn make_room_for_pinned(&mut self, pinned: usize) {
+        if self.file_error.is_some() || !self.file.predates("pinned_capacity") {
+            return;
+        }
+        self.current.make_room_for_pinned(pinned);
+        if let Err(err) = self.file.save(&self.current) {
+            eprintln!("couldn't record the Pinned limit: {err}");
+        }
+    }
+
     fn view(&self) -> SettingsView {
         SettingsView {
             settings: self.current.clone(),
             file_path: self.path.display().to_string(),
             file_error: self.file_error.clone(),
             max_history_capacity: MAX_HISTORY_CAPACITY,
+            max_pinned_capacity: MAX_PINNED_CAPACITY,
         }
     }
 }
@@ -196,6 +210,7 @@ pub struct SettingsView {
     file_path: String,
     file_error: Option<String>,
     max_history_capacity: usize,
+    max_pinned_capacity: usize,
 }
 
 /// Puts `new` into effect: hotkeys and start at login first, since those are

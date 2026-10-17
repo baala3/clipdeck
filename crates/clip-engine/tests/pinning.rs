@@ -129,16 +129,72 @@ fn unpinning_removes_only_from_the_pinned_list() {
     assert_eq!(engine.history(), vec![text_clip("hello")]);
 }
 
-#[test]
-fn pinned_list_has_no_capacity_cap() {
-    let many_clips: Vec<Clip> = (0..5000).map(|i| text_clip(&i.to_string())).collect();
-    let mut engine = engine_with_history(many_clips.clone());
+fn texts_of(clips: Vec<Clip>) -> Vec<String> {
+    clips
+        .into_iter()
+        .map(|clip| match clip.content {
+            ClipContent::Text(text) => text,
+            ClipContent::Image(_) => "image".into(),
+        })
+        .collect()
+}
 
-    for i in 0..5000 {
+#[test]
+fn pinning_into_a_full_pinned_list_removes_its_oldest_item_like_history() {
+    let mut engine = engine_with_history((0..4).map(|i| text_clip(&i.to_string())).collect());
+    engine.reconfigure(EngineConfig {
+        pinned_capacity: 3,
+        ..Default::default()
+    });
+
+    for i in 0..4 {
         engine.pin(i);
     }
 
-    assert_eq!(engine.pinned().len(), 5000);
+    assert_eq!(texts_of(engine.pinned()), vec!["1", "2", "3"]);
+    assert_eq!(engine.history().len(), 4, "History is untouched");
+}
+
+#[test]
+fn writing_into_a_full_pinned_list_removes_its_oldest_item_too() {
+    let mut engine = engine_with_history(vec![]);
+    engine.reconfigure(EngineConfig {
+        pinned_capacity: 2,
+        ..Default::default()
+    });
+
+    engine.pin_text("a".into());
+    engine.pin_text("b".into());
+    engine.pin_text("c".into());
+
+    assert_eq!(texts_of(engine.pinned()), vec!["b", "c"]);
+}
+
+#[test]
+fn lowering_the_pinned_capacity_removes_the_oldest_pinned_items_right_away() {
+    let mut engine = engine_with_history(vec![]);
+    for text in ["a", "b", "c", "d"] {
+        engine.pin_text(text.into());
+    }
+
+    engine.reconfigure(EngineConfig {
+        pinned_capacity: 2,
+        ..Default::default()
+    });
+
+    assert_eq!(texts_of(engine.pinned()), vec!["c", "d"]);
+}
+
+#[test]
+fn the_pinned_list_keeps_50_items_by_default() {
+    let mut engine = engine_with_history(vec![]);
+
+    for i in 0..60 {
+        engine.pin_text(i.to_string());
+    }
+
+    assert_eq!(engine.pinned().len(), 50);
+    assert_eq!(engine.pinned_capacity(), 50);
 }
 
 #[test]

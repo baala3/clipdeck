@@ -2,14 +2,14 @@
 
 mod autostart;
 mod clip_menu;
-mod pinned;
+mod lists;
 mod popup;
 mod settings;
 mod updates;
 
 use clip_engine::{
-    adopt_legacy_store, ClipEngine, ClipboardSource, DirImageStore, Settings, SqliteClipStore,
-    SqlitePinnedStore,
+    adopt_legacy_store, ClipEngine, ClipboardSource, DirImageStore, PinnedStore as _, Settings,
+    SqliteClipStore, SqlitePinnedStore,
 };
 use clip_menu::MenuKind;
 use settings::{HotkeyAction, Hotkeys, SettingsState, SETTINGS_WINDOW};
@@ -138,11 +138,15 @@ fn main() {
             settings::get_settings,
             settings::update_settings,
             settings::set_hotkeys_suspended,
-            pinned::list_pinned,
-            pinned::add_pinned,
-            pinned::edit_pinned,
-            pinned::remove_pinned,
-            pinned::edit_history_clip,
+            lists::list_pinned,
+            lists::list_history,
+            lists::remove_history_clip,
+            lists::toggle_history_pin,
+            lists::clear_history,
+            lists::add_pinned,
+            lists::edit_pinned,
+            lists::remove_pinned,
+            lists::edit_history_clip,
             updates::check_for_updates,
             popup::menu_shown,
             popup::cascade_open,
@@ -168,9 +172,10 @@ fn main() {
                 return Ok(());
             }
 
-            let settings_state = SettingsState::load(settings::settings_file_path(app));
+            let mut settings_state = SettingsState::load(settings::settings_file_path(app));
             let store = SqliteClipStore::open(store_path(app, "clipdeck-history.sqlite3"));
             let pinned_store = SqlitePinnedStore::open(store_path(app, "clipdeck-pinned.sqlite3"));
+            settings_state.make_room_for_pinned(pinned_store.all().len());
             let current = settings_state.current().clone();
             let current_launch_at_login = current.launch_at_login;
             let current_appearance = current.appearance;
