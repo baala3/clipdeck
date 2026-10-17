@@ -153,7 +153,9 @@ fn glass_window(app: &tauri::App, label: &str, page: &str, focusable: bool) -> t
         .resizable(false)
         .skip_taskbar(true)
         .always_on_top(true)
-        .shadow(true);
+        // Windows draws a shadowed borderless window with a 1px frame line;
+        // its corners are rounded through DWM instead (`round_corners`).
+        .shadow(cfg!(not(windows)));
     // Real glass is the OS's to draw: Acrylic blurs whatever is behind the
     // window on Windows, Liquid Glass does on macOS 26 (the menu material on
     // older macOS). X11 has no such effect, so on Linux the page paints a
@@ -178,8 +180,19 @@ fn glass_window(app: &tauri::App, label: &str, page: &str, focusable: bool) -> t
                 .radius(14.0)
                 .build(),
         );
-    builder.build()?;
+    round_corners(&builder.build()?);
     Ok(())
+}
+
+/// Windows 11's rounded corners, with no border line. Asked again each time
+/// a window shows, in case showing it reset them.
+fn round_corners(window: &tauri::WebviewWindow) {
+    #[cfg(windows)]
+    if let Ok(hwnd) = window.hwnd() {
+        clip_windows::round_without_border(hwnd.0 as isize);
+    }
+    #[cfg(not(windows))]
+    let _ = window;
 }
 
 /// Opens a menu at the mouse cursor. Called from the global-shortcut and
@@ -265,8 +278,39 @@ fn close(app: &AppHandle, restore: bool) -> Option<PopupState> {
 }
 
 /// The menu window lost the keyboard: the user clicked somewhere else.
+/// Windows also says this when the keyboard only moves into the page inside
+/// the menu (a window of its own there), so the menu closes only once it's
+/// clear the window itself is no longer the active one.
 pub fn on_blur(app: &AppHandle) {
-    close(app, false);
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(80));
+        let handle = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            // A click in a cascade can make it the active window; it's
+            // still the menu.
+            let still_active = [MENU_WINDOW, CASCADE_WINDOW].into_iter().any(|label| {
+                handle
+                    .get_webview_window(label)
+                    .is_some_and(|window| is_active(&window))
+            });
+            if !still_active {
+                close(&handle, false);
+            }
+        });
+    });
+}
+
+/// Whether `window` is still the one in front. On Windows that's asked of
+/// Windows itself: the window's own focus flag is off whenever the page
+/// inside it has the keyboard.
+fn is_active(window: &tauri::WebviewWindow) -> bool {
+    #[cfg(windows)]
+    return window
+        .hwnd()
+        .is_ok_and(|hwnd| hwnd.0 as isize == clip_windows::foreground_window());
+    #[cfg(not(windows))]
+    return window.is_focused().unwrap_or(false);
 }
 
 /// Called by the page once it has laid out a menu `width` x `height` CSS
@@ -298,6 +342,7 @@ pub fn menu_shown(app: AppHandle, width: f64, height: f64) -> bool {
     let _ = window.set_position(PhysicalPosition::new(rect.x.round(), rect.y.round()));
     let _ = window.set_size(PhysicalSize::new(rect.width.round(), rect.height.round()));
     let _ = window.show();
+    round_corners(&window);
     take_keyboard(&app, &window);
     panel_on_left
 }
@@ -365,6 +410,7 @@ pub fn cascade_shown(app: AppHandle, width: f64, height: f64) {
         let _ = window.set_position(PhysicalPosition::new(rect.x.round(), rect.y.round()));
         let _ = window.set_size(PhysicalSize::new(rect.width.round(), rect.height.round()));
         let _ = window.show();
+        round_corners(&window);
     }
 }
 
@@ -386,6 +432,16 @@ pub fn cascade_highlight(app: AppHandle, index: i64) {
 #[tauri::command]
 pub fn cascade_input(app: AppHandle, input: serde_json::Value) {
     let _ = app.emit_to(MENU_WINDOW, "cascade-input", input);
+    // The cascade isn't meant to take the keyboard, but a click in it can
+    // make it the active window on Windows; the keys belong to the menu.
+    let cascade_took_it = app
+        .get_webview_window(CASCADE_WINDOW)
+        .is_some_and(|window| is_active(&window));
+    if cascade_took_it {
+        if let Some(menu) = app.get_webview_window(MENU_WINDOW) {
+            take_keyboard(&app, &menu);
+        }
+    }
 }
 
 #[cfg(target_os = "linux")]
