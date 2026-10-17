@@ -266,10 +266,9 @@ fn close(app: &AppHandle, restore: bool) -> Option<PopupState> {
         }
         std::mem::take(&mut *popup)
     };
-    for label in [CASCADE_WINDOW, MENU_WINDOW] {
-        if let Some(window) = app.get_webview_window(label) {
-            let _ = window.hide();
-        }
+    hide_cascade(app);
+    if let Some(window) = app.get_webview_window(MENU_WINDOW) {
+        let _ = window.hide();
     }
     if restore {
         popup.previous.restore();
@@ -408,18 +407,43 @@ pub fn cascade_shown(app: AppHandle, width: f64, height: f64) {
         }
     };
     if let Some(window) = app.get_webview_window(CASCADE_WINDOW) {
-        let _ = window.set_position(PhysicalPosition::new(rect.x.round(), rect.y.round()));
-        let _ = window.set_size(PhysicalSize::new(rect.width.round(), rect.height.round()));
+        set_bounds(&window, rect);
         let _ = window.show();
         round_corners(&window);
     }
 }
 
+/// Moves and resizes `window` to `rect` (physical pixels). Windows does both
+/// in one step, so a cascade that's already showing doesn't flash at its new
+/// place in its old size.
+fn set_bounds(window: &tauri::WebviewWindow, rect: ScreenRect) {
+    #[cfg(windows)]
+    if let Ok(hwnd) = window.hwnd() {
+        clip_windows::set_window_bounds(
+            hwnd.0 as isize,
+            rect.x.round() as i32,
+            rect.y.round() as i32,
+            rect.width.round() as i32,
+            rect.height.round() as i32,
+        );
+        return;
+    }
+    let _ = window.set_size(PhysicalSize::new(rect.width.round(), rect.height.round()));
+    let _ = window.set_position(PhysicalPosition::new(rect.x.round(), rect.y.round()));
+}
+
 #[tauri::command]
 pub fn cascade_close(app: AppHandle) {
+    hide_cascade(&app);
+}
+
+/// Hides the cascade, and tells its page, which then fills the next one in
+/// before it shows rather than after.
+fn hide_cascade(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(CASCADE_WINDOW) {
         let _ = window.hide();
     }
+    let _ = app.emit_to(CASCADE_WINDOW, "cascade-hidden", ());
 }
 
 /// The menu's page moves the cascade's highlight to row `index` (-1: none).

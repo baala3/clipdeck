@@ -8,6 +8,6 @@ mod windows_adapter;
 #[cfg(target_os = "windows")]
 pub use paste::{focus_window_and_paste, foreground_window, restore_foreground};
 #[cfg(target_os = "windows")]
-pub use window_border::round_without_border;
+pub use window_border::{round_without_border, set_window_bounds};
 #[cfg(target_os = "windows")]
 pub use windows_adapter::WindowsClipboardSource;
