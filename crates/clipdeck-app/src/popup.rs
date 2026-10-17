@@ -24,7 +24,7 @@ use tauri::{
 };
 
 pub const MENU_WINDOW: &str = "menu";
-const CASCADE_WINDOW: &str = "cascade";
+pub const CASCADE_WINDOW: &str = "cascade";
 /// The widest a cascade gets in CSS pixels, as `cascade.html` draws it.
 const CASCADE_WIDTH: f64 = 320.0;
 /// How large an image Clip is shown in a cascade, in pixels: twice its size
@@ -266,10 +266,9 @@ fn close(app: &AppHandle, restore: bool) -> Option<PopupState> {
         }
         std::mem::take(&mut *popup)
     };
-    for label in [CASCADE_WINDOW, MENU_WINDOW] {
-        if let Some(window) = app.get_webview_window(label) {
-            let _ = window.hide();
-        }
+    hide_cascade(app);
+    if let Some(window) = app.get_webview_window(MENU_WINDOW) {
+        let _ = window.hide();
     }
     if restore {
         popup.previous.restore();
@@ -278,9 +277,10 @@ fn close(app: &AppHandle, restore: bool) -> Option<PopupState> {
 }
 
 /// The menu window lost the keyboard: the user clicked somewhere else.
-/// Windows also says this when the keyboard only moves into the page inside
-/// the menu (a window of its own there), so the menu closes only once it's
-/// clear the window itself is no longer the active one.
+/// The menu or its cascade lost the keyboard. Windows also says this when the
+/// keyboard only moves into the page inside the menu (a window of its own
+/// there), or between the menu and its cascade, so the menu closes only once
+/// it's clear neither of them is the active window.
 pub fn on_blur(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
@@ -407,18 +407,43 @@ pub fn cascade_shown(app: AppHandle, width: f64, height: f64) {
         }
     };
     if let Some(window) = app.get_webview_window(CASCADE_WINDOW) {
-        let _ = window.set_position(PhysicalPosition::new(rect.x.round(), rect.y.round()));
-        let _ = window.set_size(PhysicalSize::new(rect.width.round(), rect.height.round()));
+        set_bounds(&window, rect);
         let _ = window.show();
         round_corners(&window);
     }
 }
 
+/// Moves and resizes `window` to `rect` (physical pixels). Windows does both
+/// in one step, so a cascade that's already showing doesn't flash at its new
+/// place in its old size.
+fn set_bounds(window: &tauri::WebviewWindow, rect: ScreenRect) {
+    #[cfg(windows)]
+    if let Ok(hwnd) = window.hwnd() {
+        clip_windows::set_window_bounds(
+            hwnd.0 as isize,
+            rect.x.round() as i32,
+            rect.y.round() as i32,
+            rect.width.round() as i32,
+            rect.height.round() as i32,
+        );
+        return;
+    }
+    let _ = window.set_size(PhysicalSize::new(rect.width.round(), rect.height.round()));
+    let _ = window.set_position(PhysicalPosition::new(rect.x.round(), rect.y.round()));
+}
+
 #[tauri::command]
 pub fn cascade_close(app: AppHandle) {
+    hide_cascade(&app);
+}
+
+/// Hides the cascade, and tells its page, which then fills the next one in
+/// before it shows rather than after.
+fn hide_cascade(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(CASCADE_WINDOW) {
         let _ = window.hide();
     }
+    let _ = app.emit_to(CASCADE_WINDOW, "cascade-hidden", ());
 }
 
 /// The menu's page moves the cascade's highlight to row `index` (-1: none).
@@ -432,15 +457,19 @@ pub fn cascade_highlight(app: AppHandle, index: i64) {
 #[tauri::command]
 pub fn cascade_input(app: AppHandle, input: serde_json::Value) {
     let _ = app.emit_to(MENU_WINDOW, "cascade-input", input);
-    // The cascade isn't meant to take the keyboard, but a click in it can
-    // make it the active window on Windows; the keys belong to the menu.
-    let cascade_took_it = app
-        .get_webview_window(CASCADE_WINDOW)
-        .is_some_and(|window| is_active(&window));
-    if cascade_took_it {
-        if let Some(menu) = app.get_webview_window(MENU_WINDOW) {
-            take_keyboard(&app, &menu);
-        }
+}
+
+/// The cascade isn't meant to take the keyboard, but a click anywhere in it
+/// (a row, or the full text of a preview) can make it the active window on
+/// Windows. Left there, Esc and the arrow keys would reach a page that
+/// ignores them, and a click outside would close nothing, since the menu had
+/// already lost the keyboard. So it goes straight back to the menu.
+pub fn on_cascade_focus(app: &AppHandle) {
+    if !app.state::<AppState>().popup.lock().unwrap().open {
+        return;
+    }
+    if let Some(menu) = app.get_webview_window(MENU_WINDOW) {
+        take_keyboard(app, &menu);
     }
 }
 

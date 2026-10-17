@@ -288,9 +288,14 @@ fn main() {
                 api.prevent_close();
                 let _ = window.hide();
             }
-            // A click outside the glass menu closes it, like any menu.
-            WindowEvent::Focused(false) if window.label() == popup::MENU_WINDOW => {
+            // A click outside the glass menu or its cascade closes it, like any menu.
+            WindowEvent::Focused(false)
+                if [popup::MENU_WINDOW, popup::CASCADE_WINDOW].contains(&window.label()) =>
+            {
                 popup::on_blur(window.app_handle());
+            }
+            WindowEvent::Focused(true) if window.label() == popup::CASCADE_WINDOW => {
+                popup::on_cascade_focus(window.app_handle());
             }
             _ => {}
         })

@@ -26,3 +26,23 @@ pub fn round_without_border(handle: isize) {
         );
     }
 }
+
+/// Moves and resizes a window in one step, without activating it. Moving
+/// and then resizing would show it for a moment at its new place in its old
+/// size.
+pub fn set_window_bounds(handle: isize, x: i32, y: i32, width: i32, height: i32) {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SetWindowPos, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER,
+    };
+    unsafe {
+        let _ = SetWindowPos(
+            HWND(handle as *mut core::ffi::c_void),
+            None,
+            x,
+            y,
+            width,
+            height,
+            SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER,
+        );
+    }
+}

@@ -16,10 +16,16 @@
 // reports the mouse back.
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
-const pane = document.getElementById('cascade');
+// The pane on show. A new one is built out of sight, placed, then swapped in.
+let pane = document.getElementById('cascade');
 
 let content = null;
 let rows = [];
+let highlighted = -1;
+// Whether the window is on screen. Hidden, it takes its new content before
+// it shows; showing, it moves and resizes first, so it never shows the new
+// content in the old box, or the old content in the new one.
+let onScreen = false;
 
 const report = (type, index, e) => invoke('cascade_input', {
   input: {
@@ -33,11 +39,13 @@ const report = (type, index, e) => invoke('cascade_input', {
   },
 });
 
-function render() {
-  pane.replaceChildren();
-  rows = [];
-  for (const item of content.rows) {
-    if (!item) { pane.append(GlassMenu.separator()); continue; }
+// Fills `next` with `shown`'s rows or preview; returns its rows by index.
+// An image's picture is loaded before this returns, so the cascade appears
+// once, at its final size.
+async function render(next, shown) {
+  const built = [];
+  for (const item of shown.rows) {
+    if (!item) { next.append(GlassMenu.separator()); continue; }
     const node = GlassMenu.row((node) => {
       if (item.kind === 'clip') GlassMenu.fillClip(node, item.clip);
       else GlassMenu.fillCommand(node, item.title, item.checked);
@@ -52,49 +60,64 @@ function render() {
       node.addEventListener('mouseenter', () => report('enter', item.index));
       node.addEventListener('click', (e) => report('click', item.index, e));
       node.addEventListener('contextmenu', () => report('menu', item.index));
-      rows[item.index] = node;
+      built[item.index] = node;
     }
-    pane.append(node);
+    next.append(node);
   }
-  const { preview } = content;
-  if (preview?.text) pane.append(GlassMenu.el('div', 'preview-text', preview.text));
+  const { preview } = shown;
+  if (preview?.text) next.append(GlassMenu.el('div', 'preview-text', preview.text));
   if (preview?.imageId) {
-    const loading = GlassMenu.el('div', 'preview-loading', 'Loading...');
-    pane.append(loading);
-    const shown = content;
-    invoke('menu_preview', { id: preview.imageId }).then((url) => {
-      if (content !== shown || !url) return;
+    const url = await invoke('menu_preview', { id: preview.imageId });
+    if (url) {
       const picture = GlassMenu.el('img', 'preview-image');
       picture.alt = preview.title;
-      picture.onload = place;
       picture.src = url;
-      loading.replaceWith(picture);
-    });
+      next.append(picture);
+      await picture.decode().catch(() => {});
+    }
   }
+  return built;
 }
 
-// Sized to what it shows, up to its width; then placed beside its row.
-function place() {
-  const box = pane.getBoundingClientRect();
-  invoke('cascade_shown', { width: Math.ceil(box.width), height: Math.ceil(box.height) });
-}
-
-listen('cascade-open', ({ payload }) => {
+listen('cascade-open', async ({ payload }) => {
   content = payload;
-  document.documentElement.className = content.platform;
-  const fits = content.preview?.text !== undefined;
-  pane.style.width = fits ? 'max-content' : `${content.width}px`;
-  pane.style.maxWidth = `${content.width}px`;
-  render();
-  place();
+  const shown = payload;
+  document.documentElement.className = shown.platform;
+  // Built beside the pane on show, out of sight, so nothing changes on
+  // screen until the window has its new place and size.
+  const next = GlassMenu.el('div', 'pane cascade');
+  next.setAttribute('role', 'menu');
+  next.style.width = shown.preview?.text !== undefined ? 'max-content' : `${shown.width}px`;
+  next.style.maxWidth = `${shown.width}px`;
+  next.style.position = 'absolute';
+  next.style.visibility = 'hidden';
+  document.body.append(next);
+  const built = await render(next, shown);
+  if (content !== shown) { next.remove(); return; }
+  const box = next.getBoundingClientRect();
+  const size = { width: Math.ceil(box.width), height: Math.ceil(box.height) };
+  const swap = () => {
+    next.style.position = '';
+    next.style.visibility = '';
+    next.addEventListener('mouseenter', () => content && report('hover', -1));
+    pane.replaceWith(next);
+    pane = next;
+    rows = built;
+    rows.forEach((node, i) => node?.classList.toggle('on', i === highlighted));
+  };
+  if (!onScreen) swap();
+  await invoke('cascade_shown', size);
+  onScreen = true;
+  if (content !== shown) { if (next !== pane) next.remove(); return; }
+  if (next !== pane) swap();
 });
+
+listen('cascade-hidden', () => { onScreen = false; });
 
 listen('cascade-highlight', ({ payload: index }) => {
+  highlighted = index;
   rows.forEach((node, i) => node?.classList.toggle('on', i === index));
 });
-
-// The pointer is over the cascade: the menu keeps it open.
-pane.addEventListener('mouseenter', () => content && report('hover', -1));
 </script>
 </body>
 </html>
